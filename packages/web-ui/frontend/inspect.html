@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>inspect · Playwright 渐进式调试器</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldgutter.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/dracula.min.css" />
+<link rel="stylesheet" href="/assets/css/inspect.css" />
+<link rel="stylesheet" href="/assets/css/code-panel.css" />
+</head>
+<body>
+
+<!-- ========== 顶栏 ========== -->
+<header class="ins-top">
+  <div class="ins-brand">🔍 inspect</div>
+  <input id="ins-url" placeholder="输入网站地址，如 localhost:8000（自动补 http://）" />
+  <button id="ins-open" class="ins-btn primary">🌐 打开</button>
+  <div class="ins-nav">
+    <button id="ins-back" class="ins-btn" title="后退" disabled>←</button>
+    <button id="ins-fwd" class="ins-btn" title="前进" disabled>→</button>
+    <button id="ins-reload" class="ins-btn" title="刷新" disabled>⟳</button>
+  </div>
+  <span id="ins-status" class="ins-status">未连接</span>
+  <div class="ins-top-right">
+    <button class="ins-btn" title="AutoTest 管理台" onclick="location.href='/app'">📊 管理台</button>
+    <button id="ins-end" class="ins-btn danger" disabled>⏹ 结束并保存</button>
+  </div>
+</header>
+
+<!-- ========== 主区: 左历史会话 + 左预览 + 右侧边栏 ========== -->
+<main class="ins-main">
+  <aside class="ins-sessions" id="ins-sessions">
+    <div class="ins-sess-head">
+      <h2>📁 历史会话</h2>
+      <span class="ins-sess-cnt" id="ins-sess-cnt"></span>
+      <button id="ins-sess-collapse" class="ins-sess-collapse" title="收起历史会话">«</button>
+    </div>
+    <div class="ins-sess-list" id="ins-sess-list">
+      <div class="ins-h-empty">暂无历史会话</div>
+    </div>
+    <button id="ins-sess-expand" class="ins-sess-expand" title="展开历史会话">📁</button>
+  </aside>
+  <div class="ins-vdivider" id="ins-sess-divider" title="拖拽调整左栏宽度"></div>
+  <section class="ins-preview" id="ins-preview">
+    <div id="ins-empty" class="ins-empty">输入 URL 打开页面，开始渐进式调试<br/>
+      <small>hover 查看元素 · 点击选中 · 直接拖动 = 真实拖拽（滑块验证/排序） · 配置动作执行 · 时间线自动记录</small>
+    </div>
+    <div id="ins-error" class="ins-error" style="display:none">
+      <span id="ins-error-text"></span>
+      <button id="ins-retry" class="ins-btn">重试</button>
+    </div>
+    <div id="ins-stage" class="ins-stage" style="display:none">
+      <img id="ins-live-img" alt="实时预览" />
+      <div id="ins-hover-box" class="ins-box hover" data-label=""></div>
+      <div id="ins-select-box" class="ins-box select" data-label="已选中"></div>
+    </div>
+    <div class="ins-zoom-bar" id="ins-zoom-bar" style="display:none">
+      <button id="ins-zoom-out" title="缩小 (Ctrl+滚轮下)">−</button>
+      <span class="z-val" id="ins-zoom-val">100%</span>
+      <button id="ins-zoom-in" title="放大 (Ctrl+滚轮上)">＋</button>
+      <span class="z-sep"></span>
+      <button id="ins-zoom-fit" title="适应 (完整可见)">⛶ 适应</button>
+      <button id="ins-zoom-cover" title="铺满 (裁切黑边)">▣ 铺满</button>
+    </div>
+  </section>
+
+  <div class="ins-vdivider" id="ins-divider" title="拖拽调整侧栏宽度"></div>
+
+  <aside class="ins-side" id="ins-side">
+    <div class="ins-tabs">
+      <button class="ins-tab active" data-tab="inspect">检视</button>
+      <button class="ins-tab" data-tab="timeline" id="ins-tab-timeline">时间线</button>
+      <button class="ins-tab" data-tab="code">代码</button>
+    </div>
+
+    <!-- 检视 -->
+    <div class="ins-pane active" id="ins-pane-inspect">
+      <div class="ins-sec">
+        <div class="ins-sec-title">元素信息</div>
+        <div id="ins-el-info" class="ins-el-info"><div class="ins-hint">hover 预览画面查看元素，点击选中后配置动作</div></div>
+      </div>
+      <div class="ins-sec">
+        <div class="ins-sec-title">候选定位器 <span id="ins-cand-hint" class="ins-hint" style="padding:0"></span></div>
+        <div id="ins-cands" class="ins-cands"><div class="ins-hint">点击预览选中元素后，这里列出候选定位器（按稳定性排序）</div></div>
+      </div>
+      <div class="ins-sec">
+        <div class="ins-sec-title">动作配置</div>
+        <select id="ins-action" class="ins-select" disabled></select>
+        <input id="ins-value" class="ins-input" style="display:none" placeholder="值" />
+        <div id="ins-select-options"></div>
+        <div class="ins-btnrow">
+          <button id="ins-probe-btn" class="ins-btn" disabled>🔍 探测</button>
+          <button id="ins-highlight-btn" class="ins-btn" disabled>👁 高亮</button>
+          <button id="ins-exec-btn" class="ins-btn primary" disabled>▶ 执行一步</button>
+        </div>
+        <div id="ins-exec-status" class="ins-exec-status"></div>
+      </div>
+    </div>
+
+    <!-- 时间线 -->
+    <div class="ins-pane" id="ins-pane-timeline">
+      <div class="ins-tl-bar">
+        <span id="ins-tl-count">0 步</span>
+        <span class="grow"></span>
+        <button id="ins-export-json" class="mini">导出 JSON</button>
+        <button id="ins-export-js" class="mini">导出 JS</button>
+        <button id="ins-export-py" class="mini">导出 PY</button>
+      </div>
+      <div id="ins-steps" class="ins-steps"><div class="ins-hint">执行的每一步会记录在这里</div></div>
+    </div>
+
+    <!-- 代码(与 index.html 代码面板同构: CodeMirror 编辑器 + 运行/设置/导出/调试日志) -->
+    <div class="ins-pane" id="ins-pane-code">
+      <div class="code-panel" id="code-panel" style="flex:1;min-height:0;">
+        <!-- 顶部工具条 -->
+        <div class="code-toolbar">
+          <div class="code-tb-left">
+            <select id="code-lang" class="code-lang-select" onchange="onCodeLangChange()" title="选择脚本语言">
+              <option value="js">JavaScript</option>
+              <option value="py">Python</option>
+              <option value="json">JSON</option>
+            </select>
+            <button class="code-btn" id="code-refresh-btn" onclick="codeRefresh()" title="从当前步骤自动生成脚本">🔄 刷新</button>
+            <button class="code-btn" onclick="codeCopy()" title="复制代码到剪贴板">📋 复制</button>
+          </div>
+          <div class="code-tb-right">
+            <button class="code-btn" onclick="codeSave()" title="保存脚本文件">💾 保存</button>
+            <button class="code-btn run" id="code-run-btn" onclick="codeRun()" title="运行脚本">▶ 运行</button>
+            <button class="code-btn" onclick="openCodeSettings()" title="运行设置">⚙ 设置</button>
+            <div class="code-export-wrap">
+              <button class="code-btn" onclick="toggleExportMenu()" title="导出">📤 导出 ▾</button>
+              <div class="code-export-menu" id="code-export-menu">
+                <div onclick="codeExport('json')">导出 JSON</div>
+                <div onclick="codeExport('py')">导出 Python</div>
+                <div onclick="codeExport('js')">导出 JavaScript</div>
+              </div>
+            </div>
+          </div>
+          <span class="code-status" id="code-status"></span>
+        </div>
+        <!-- 代码编辑器 -->
+        <div class="code-editor-wrap" id="code-editor-wrap">
+          <textarea id="code-editor-src" style="display:none;" placeholder="// Playwright 脚本将在此显示&#10;// 点击「刷新」从当前执行步骤自动生成&#10;// 或手动编辑代码后点击「运行」"></textarea>
+        </div>
+        <!-- 可拖拽分隔线 -->
+        <div class="code-splitter" id="code-splitter" title="拖拽调整大小"></div>
+        <!-- 调试日志 -->
+        <div class="code-debug" id="code-debug">
+          <div class="code-debug-header">
+            <span>🔍 调试日志</span>
+            <div class="ctrl">
+              <button onclick="copyLog()" title="复制日志">📋 复制</button>
+              <button onclick="downloadLog()" title="下载日志文件">📥 下载</button>
+              <button onclick="sendLogToInput()" title="发送到输入框">📨 发送</button>
+              <button onclick="clearDebugLog()" class="danger" title="清空日志">🗑 清空</button>
+            </div>
+          </div>
+          <div class="code-debug-body" id="code-debug-body">
+            <div class="code-debug-empty">点击「运行」执行脚本，日志将显示在此处</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<!-- 截图大图预览(结构与 index.html viewer 完全一致) -->
+<div class="viewer" id="ins-viewer">
+  <div class="close" id="ins-viewer-close">&times;</div>
+  <img id="ins-viewer-img" alt="" />
+  <div class="cap" id="ins-viewer-cap"></div>
+  <div class="nav">
+    <button class="btn ghost" id="ins-viewer-prev">◀ 上一步</button>
+    <button class="btn ghost" id="ins-viewer-next">下一步 ▶</button>
+  </div>
+</div>
+<div id="ins-toast" class="ins-toast"></div>
+
+<!-- CodeMirror CDN 必须在 code-panel.js 之前加载 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldgutter.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/brace-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/indent-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/comment-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/comment/comment.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/python/python.min.js"></script>
+<script src="/code-generator.js"></script>
+<script src="/assets/js/inspect-timeline.js"></script>
+<script src="/assets/js/code-panel.js"></script>
+<script src="/assets/js/inspect-ws.js"></script>
+<script src="/assets/js/inspect-live.js"></script>
+<script src="/assets/js/inspect-locator.js"></script>
+<script src="/assets/js/inspect-app.js"></script>
+</body>
+</html>

@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoTest · 深色科技 UX 交互原型</title>
+<style>
+  :root{
+    --bg:#0a0a0c; --panel:#121216; --panel2:#16161b; --border:#1f2937; --border2:#27272e;
+    --text:#e5e7eb; --text2:#9ca3af; --text3:#6b7280;
+    --cyan:#22d3ee; --green:#10b981; --red:#ef4444; --amber:#f59e0b; --violet:#8b5cf6;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{font-family:var(--sans);background:var(--bg);color:var(--text);
+    background-image:linear-gradient(rgba(34,211,238,.035) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(34,211,238,.035) 1px,transparent 1px);
+    background-size:32px 32px;font-size:14px;overflow:hidden}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:#2a2a31;border-radius:4px}
+  ::-webkit-scrollbar-track{background:transparent}
+  a{color:var(--cyan);text-decoration:none}
+  .mono{font-family:var(--mono)}
+
+  /* ===== 布局 ===== */
+  .app{display:flex;height:100vh}
+  /* 侧边栏 */
+  .side{width:224px;min-width:224px;background:rgba(14,14,18,.92);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;padding:16px 12px;gap:2px}
+  .logo{display:flex;align-items:center;gap:10px;padding:6px 10px 18px;margin-bottom:8px;border-bottom:1px solid var(--border)}
+  .logo-mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#22d3ee,#0e7490);
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#041014}
+  .logo-name{font-size:15px;font-weight:600;letter-spacing:-.3px}
+  .logo-sub{font-size:10px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;font-family:var(--mono)}
+  .nav-group{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;
+    padding:14px 10px 6px;font-family:var(--mono)}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;cursor:pointer;
+    color:var(--text2);font-size:13.5px;transition:all .15s ease;border:1px solid transparent}
+  .nav-item:hover{background:rgba(255,255,255,.04);color:var(--text)}
+  .nav-item.active{background:rgba(34,211,238,.10);color:var(--cyan);border-color:rgba(34,211,238,.25)}
+  .nav-item svg{width:16px;height:16px;flex-shrink:0}
+  .nav-badge{margin-left:auto;font-size:10px;font-family:var(--mono);background:rgba(34,211,238,.15);
+    color:var(--cyan);padding:1px 7px;border-radius:99px}
+  .side-bottom{margin-top:auto;padding-top:12px;border-top:1px solid var(--border)}
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px rgba(16,185,129,.8);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+  /* 主区 */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{height:56px;min-height:56px;display:flex;align-items:center;gap:16px;padding:0 24px;
+    border-bottom:1px solid var(--border);background:rgba(10,10,12,.7);backdrop-filter:blur(10px)}
+  .crumb{font-size:13px;color:var(--text3);display:flex;gap:6px;align-items:center}
+  .crumb b{color:var(--text);font-weight:500}
+  .search{margin-left:auto;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);
+    border-radius:8px;padding:7px 12px;width:260px;color:var(--text3)}
+  .search input{background:none;border:none;outline:none;color:var(--text);width:100%;font-size:13px}
+  .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#22d3ee,#6366f1);
+    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+  .content{flex:1;overflow-y:auto;padding:24px}
+  .page{display:none;animation:fade .25s ease}
+  .page.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  /* 通用组件 */
+  .page-title{font-size:20px;font-weight:600;letter-spacing:-.5px;display:flex;align-items:center;gap:12px;margin-bottom:4px}
+  .page-sub{color:var(--text3);font-size:13px;margin-bottom:20px}
+  .h-row{display:flex;align-items:center;gap:12px}
+  .btn{display:inline-flex;align-items:center;gap:6px;border-radius:7px;padding:8px 14px;font-size:13px;
+    cursor:pointer;transition:all .15s ease;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-weight:500}
+  .btn:hover{border-color:var(--border2);background:#1d1d23}
+  .btn.primary{background:var(--cyan);border-color:var(--cyan);color:#041014;font-weight:600}
+  .btn.primary:hover{background:#35dbf5}
+  .btn.danger{background:transparent;border-color:rgba(239,68,68,.4);color:var(--red)}
+  .btn.danger:hover{background:rgba(239,68,68,.1)}
+  .btn:active{transform:scale(.98)}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--text2)}
+  .btn.ghost:hover{background:rgba(255,255,255,.05)}
+  .iconbtn{width:30px;height:30px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;
+    border:1px solid var(--border);background:var(--panel2);cursor:pointer;color:var(--text2);transition:all .15s}
+  .iconbtn:hover{color:var(--cyan);border-color:rgba(34,211,238,.4)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:2px 8px;border-radius:99px;font-weight:500}
+  .tag.ai{background:rgba(139,92,246,.14);color:#a78bfa}
+  .tag.browser{background:rgba(16,185,129,.13);color:#34d399}
+  .tag.amber{background:rgba(245,158,11,.13);color:#fbbf24}
+  .tag.cyan{background:rgba(34,211,238,.13);color:#22d3ee}
+  .tag.green{background:rgba(16,185,129,.13);color:#34d399}
+  .tag.red{background:rgba(239,68,68,.13);color:#f87171}
+  .tag.gray{background:rgba(148,163,184,.13);color:#94a3b8}
+  .bar{height:4px;border-radius:99px;background:#232329;overflow:hidden}
+  .bar>i{display:block;height:100%;border-radius:99px;background:var(--cyan);transition:width .6s ease}
+
+  /* ===== 看板页 ===== */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+  .stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .stat .num{font-size:28px;font-weight:600;letter-spacing:-1px;font-family:var(--mono)}
+  .stat .lbl{font-size:12px;color:var(--text3);margin-top:2px}
+  .stat .delta{font-size:11px;font-family:var(--mono);margin-top:6px}
+  .stat .delta.up{color:var(--green)} .stat .delta.down{color:var(--red)} .stat .delta.flat{color:var(--text3)}
+  .seg{display:inline-flex;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:3px;gap:2px}
+  .seg span{padding:5px 14px;border-radius:6px;font-size:12.5px;color:var(--text2);cursor:pointer}
+  .seg span.on{background:rgba(34,211,238,.12);color:var(--cyan)}
+  .board{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .col{background:rgba(255,255,255,.015);border:1px solid var(--border);border-radius:10px;padding:10px;min-height:420px}
+  .col-head{display:flex;align-items:center;gap:8px;padding:6px 8px 12px}
+  .col-dot{width:8px;height:8px;border-radius:50%}
+  .col-head b{font-size:13px;font-weight:600}
+  .col-count{font-size:11px;font-family:var(--mono);background:#1d1d23;color:var(--text3);padding:1px 8px;border-radius:99px}
+  .taskcard{background:var(--panel2);border:1px solid var(--border);border-left:3px solid var(--border2);
+    border-radius:8px;padding:11px;margin-bottom:9px;cursor:grab;transition:all .15s ease}
+  .taskcard:hover{transform:translateY(-1px);border-color:var(--border2)}
+  .taskcard .tc-top{display:flex;align-items:center;gap:6px;margin-bottom:7px}
+  .taskcard .tc-name{font-size:13px;font-weight:600}
+  .taskcard .tc-meta{font-size:11px;color:var(--text3);display:flex;align-items:center;gap:8px;font-family:var(--mono)}
+  .taskcard.dragging{opacity:.4}
+  .ring{width:26px;height:26px;border-radius:50%;position:relative}
+  .ring svg{transform:rotate(-90deg)}
+  .col.amber .col-dot{background:var(--amber)} .col.amber .taskcard{border-left-color:var(--amber)}
+  .col.cyan .col-dot{background:var(--cyan)} .col.cyan .taskcard{border-left-color:var(--cyan)}
+  .col.green .col-dot{background:var(--green)} .col.green .taskcard{border-left-color:var(--green)}
+  .col.red .col-dot{background:var(--red)} .col.red .taskcard{border-left-color:var(--red)}
+  .col.hover{border-color:rgba(34,211,238,.4)}
+
+  /* ===== AI 录制页 ===== */
+  .ai-wrap{display:grid;grid-template-columns:1fr 400px;gap:16px}
+  .ai-banner{background:linear-gradient(90deg,rgba(34,211,238,.08),transparent);border:1px solid rgba(34,211,238,.2);
+    border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px;margin-bottom:16px}
+  .ai-banner .spin{width:22px;height:22px;border:2px solid rgba(34,211,238,.25);border-top-color:var(--cyan);border-radius:50%;animation:rot 1s linear infinite}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .steps{display:flex;flex-direction:column;gap:8px}
+  .step{display:flex;gap:12px;padding:10px 12px;border-radius:9px;background:var(--panel);border:1px solid var(--border);
+    align-items:flex-start;opacity:.85}
+  .step .idx{font-family:var(--mono);font-size:11px;color:var(--text3);width:18px;flex-shrink:0;text-align:right;line-height:20px}
+  .step .act{font-family:var(--mono);font-size:11.5px;color:var(--cyan);width:74px;flex-shrink:0;line-height:20px;font-weight:500}
+  .step .desc{font-size:13px;line-height:20px;color:var(--text)}
+  .step .dur{margin-left:auto;font-size:11px;color:var(--text3);font-family:var(--mono)}
+  .step.done{border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.04)}
+  .step.done .idx{color:var(--green)}
+  .step.running{border-color:rgba(34,211,238,.5);background:rgba(34,211,238,.05);opacity:1;box-shadow:0 0 0 1px rgba(34,211,238,.15)}
+  .step.running .idx{color:var(--cyan)}
+  .llm-row{display:flex;align-items:center;gap:10px;color:var(--text2);font-size:12.5px;padding:10px 12px}
+  .dots{display:inline-flex;gap:4px}
+  .dots i{width:5px;height:5px;border-radius:50%;background:var(--cyan);animation:blink 1.2s infinite}
+  .dots i:nth-child(2){animation-delay:.2s}.dots i:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
+  .browser-preview{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+  .bp-bar{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--border);background:#0e0e12}
+  .bp-dot{width:10px;height:10px;border-radius:50%;background:#2a2a31}
+  .bp-dot:nth-child(1){background:var(--red)}.bp-dot:nth-child(2){background:var(--amber)}.bp-dot:nth-child(3){background:var(--green)}
+  .bp-url{flex:1;font-size:11px;font-family:var(--mono);color:var(--text3);text-align:center;background:#1a1a20;border-radius:5px;padding:3px}
+  .bp-body{flex:1;min-height:380px;display:flex;align-items:center;justify-content:center;position:relative;background:linear-gradient(180deg,#12151a,#0d0f14)}
+  .bp-mock{width:80%;text-align:center;opacity:.5}
+  .bp-mock .m-input{background:#1a1f26;border:1px solid #2a333d;border-radius:6px;padding:8px;margin:6px auto;width:70%}
+  .bp-mock .m-btn{display:inline-block;background:var(--cyan);color:#041014;padding:7px 18px;border-radius:6px;font-weight:600;margin-top:6px}
+  .bp-actions{display:flex;gap:10px;padding:12px;border-top:1px solid var(--border);background:#0e0e12}
+
+  /* ===== 浏览器录制监控页 ===== */
+  .rec-top{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:16px}
+  .rec-timer{font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-1px}
+  .rec-timer.warn{color:var(--amber)}
+  .ctrl{display:flex;gap:10px;margin-top:14px}
+  .rec-body{display:grid;grid-template-columns:1.6fr 1fr;gap:16px}
+  .rec-list{display:flex;flex-direction:column;gap:6px;max-height:430px;overflow-y:auto}
+  .rec-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);border:1px solid var(--border);
+    border-radius:7px;font-size:12.5px}
+  .rec-item .no{font-family:var(--mono);color:var(--text3);font-size:11px;width:26px}
+  .rec-item .type{font-family:var(--mono);font-size:11px;color:var(--cyan);width:64px}
+  .rec-item .sel{color:var(--text2);font-size:11px;font-family:var(--mono);margin-left:auto}
+  .iframe-state{font-size:12px;color:var(--text3);margin-top:8px}
+  .iframe-state b{color:var(--green)}
+  .iframe-item{display:flex;justify-content:space-between;font-size:12px;color:var(--text2);padding:6px 0;border-bottom:1px dashed var(--border)}
+
+  /* ===== 执行监控页 ===== */
+  .exe-top{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:16px}
+  .exe-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  .exe-item .lbl{font-size:11px;color:var(--text3);margin-bottom:3px}
+  .exe-item .val{font-size:15px;font-weight:600;font-family:var(--mono)}
+  .exe-main{display:grid;grid-template-columns:1.5fr 1fr;gap:16px}
+  .log{font-family:var(--mono);font-size:12px;line-height:1.9;max-height:420px;overflow-y:auto;background:#0d0d11;
+    border:1px solid var(--border);border-radius:9px;padding:14px}
+  .log .t{color:var(--text3)} .log .ok{color:var(--green)} .log .info{color:var(--text2)} .log .err{color:var(--red)}
+  .shots{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .shot{aspect-ratio:4/3;background:#12151a;border:1px solid var(--border);border-radius:8px;position:relative;overflow:hidden}
+  .shot::after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(34,211,238,.06),transparent 40%,rgba(139,92,246,.06))}
+  .shot .cap{position:absolute;bottom:0;left:0;right:0;padding:14px 10px 7px;font-size:11px;color:var(--text3);
+    background:linear-gradient(transparent,rgba(0,0,0,.7));font-family:var(--mono)}
+  .shot::before{content:"";position:absolute;inset:12%;border:1px solid rgba(148,163,184,.15);border-radius:4px}
+  .shot img{display:none}
+
+  /* ===== 报告页 ===== */
+  .rpt-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+  .rpt-stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .rpt-stat .num{font-size:26px;font-weight:600;font-family:var(--mono);letter-spacing:-1px}
+  .rpt-stat .lbl{font-size:12px;color:var(--text3);margin-top:2px}
+  .rpt-main{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:16px}
+  .rpt-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .rpt-card h4{font-size:13px;margin-bottom:12px;color:var(--text2);font-weight:600;letter-spacing:-.2px}
+  .chart{position:relative;height:180px;display:flex;align-items:flex-end;gap:8px;padding-top:10px}
+  .chart .barx{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .chart .b{width:60%;background:linear-gradient(180deg,rgba(34,211,238,.6),rgba(34,211,238,.15));border-radius:4px 4px 0 0;transition:height .8s ease}
+  .chart .x{font-size:10px;color:var(--text3);font-family:var(--mono)}
+  .sum-list{display:flex;flex-direction:column;gap:9px}
+  .sum-item{display:flex;justify-content:space-between;font-size:12.5px;padding-bottom:9px;border-bottom:1px dashed var(--border)}
+  .sum-item .k{color:var(--text3)} .sum-item .v{color:var(--text);font-family:var(--mono)}
+  .video{background:#000;border:1px solid var(--border);border-radius:10px;aspect-ratio:16/7;margin-bottom:16px;
+    display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+  .video::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(34,211,238,.12),transparent 70%)}
+  .play{width:56px;height:56px;border-radius:50%;background:rgba(34,211,238,.9);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;z-index:2}
+  .play:hover{transform:scale(1.08)}
+  .play svg{width:20px;height:20px;fill:#041014;margin-left:3px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;padding:9px 10px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);font-size:11.5px}
+  td{padding:9px 10px;border-bottom:1px solid rgba(31,41,55,.5);color:var(--text2)}
+  td .mini{width:64px;height:40px;background:#12151a;border:1px solid var(--border);border-radius:5px;display:inline-block;vertical-align:middle}
+
+  /* ===== 项目页 ===== */
+  .proj-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .proj{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer;transition:all .15s}
+  .proj:hover{transform:translateY(-2px);border-color:rgba(34,211,238,.3)}
+  .proj .top{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+  .proj-ico{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px}
+  .proj .name{font-size:14px;font-weight:600}
+  .proj .desc{font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.6}
+  .proj .meta{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text3);font-family:var(--mono)}
+  .proj .actions{display:flex;gap:6px;margin-top:12px;opacity:0;transition:opacity .15s}
+  .proj:hover .actions{opacity:1}
+  .entry-banner{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px}
+  .entry{background:linear-gradient(135deg,rgba(34,211,238,.06),rgba(139,92,246,.06));border:1px dashed rgba(34,211,238,.3);
+    border-radius:10px;padding:18px;display:flex;align-items:center;gap:14px}
+  .entry .e-t{font-size:14px;font-weight:600}.entry .e-d{font-size:12px;color:var(--text3);margin-top:3px}
+  .entry .btn{margin-left:auto}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ===== 侧边栏 ===== -->
+  <aside class="side">
+    <div class="logo">
+      <div class="logo-mark">AT</div>
+      <div>
+        <div class="logo-name">AutoTest</div>
+        <div class="logo-sub">TestOps Console</div>
+      </div>
+    </div>
+    <div class="nav-group">工作台</div>
+    <div class="nav-item" data-page="page-projects">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      录制项目
+    </div>
+    <div class="nav-item active" data-page="page-dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 9h8M8 13h5M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      测试任务 <span class="nav-badge">24</span>
+    </div>
+    <div class="nav-item" data-page="page-plans">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
+      测试计划
+    </div>
+    <div class="nav-item" data-page="page-report">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>
+      测试报告
+    </div>
+    <div class="nav-group">录制模式</div>
+    <div class="nav-item" data-page="page-ai">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 4.8L18.7 9.7l-4.8 1.9L12 16.4l-1.9-4.8L5.3 9.7l4.8-1.9z"/><path d="M19 15l.9 2.3 2.1.7-2.1.7L19 21l-.9-2.3-2.1-.7 2.1-.7z"/></svg>
+      AI 录制 <span class="nav-badge">live</span>
+    </div>
+    <div class="nav-item" data-page="page-browser">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>
+      浏览器录制
+    </div>
+    <div class="nav-item" data-page="page-exec">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16M4 12h16M4 19h10"/></svg>
+      执行监控
+    </div>
+    <div class="side-bottom nav-item">
+      <span class="status-dot"></span> Runner · :9377
+      <span style="color:var(--text3);font-size:11px;margin-left:auto" class="mono">online</span>
+    </div>
+  </aside>
+
+  <!-- ===== 主区 ===== -->
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">AutoTest <span>/</span> <b id="crumb">测试任务</b></div>
+      <div class="search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+        <input placeholder="搜索任务 / 项目 / 报告…">
+      </div>
+      <div class="avatar">PM</div>
+    </div>
+
+    <div class="content">
+
+      <!-- ===== 任务看板 ===== -->
+      <section class="page active" id="page-dashboard">
+        <div class="page-title">任务工作台 <span class="tag cyan mono" style="font-family:var(--mono)">串行队列</span></div>
+        <div class="page-sub">单机串行执行 · 同一时间仅运行一个任务，其余自动排队</div>
+        <div class="stats">
+          <div class="stat"><div class="lbl">总任务</div><div class="num">24</div><div class="delta up">▲ 12.4% 较上周</div></div>
+          <div class="stat"><div class="lbl">待执行</div><div class="num">12</div><div class="delta flat">队列空闲</div></div>
+          <div class="stat"><div class="lbl">执行中</div><div class="num">3</div><div class="delta flat">1 个串行槽位</div></div>
+          <div class="stat"><div class="lbl">今日通过率</div><div class="num">89<span style="font-size:16px">%</span></div><div class="delta up">▲ 3.2%</div></div>
+        </div>
+        <div class="h-row" style="margin-bottom:16px;justify-content:space-between">
+          <div class="seg"><span class="on">看板</span><span>列表</span></div>
+          <div class="h-row">
+            <button class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>新建任务</button>
+            <button class="btn ghost">批量执行</button>
+          </div>
+        </div>
+        <div class="board">
+          <div class="col amber" data-col="pending">
+            <div class="col-head"><span class="col-dot"></span><b>待执行</b><span class="col-count">12</span></div>
+            <div class="taskcard" draggable="true"><div class="tc-top"><span class="tag ai">AI</span><span class="tc-name">注册流程</span></div><div class="tc-meta">Chromium 120 · 2m</div></div>
+            <div class="taskcard" draggable="true"><div class="tc-top"><span class="tag browser">浏览器</span><span class="tc-name">订单查询</span></div><div class="tc-meta">WebKit 17 · 5m</div></div>
+            <div class="taskcard" draggable="true"><div class="tc-top"><span class="tag ai">AI</span><span class="tc-name">支付测试</span></div><div class="tc-meta">Firefox 115 · 8m</div></div>
+          </div>
+          <div class="col cyan" data-col="running">
+            <div class="col-head"><span class="col-dot"></span><b>执行中</b><span class="col-count">3</span></div>
+            <div class="taskcard">
+              <div class="tc-top"><span class="tag browser">浏览器</span><span class="tc-name">登录测试</span>
+                <span style="margin-left:auto" class="ring"><svg width="26" height="26" viewBox="0 0 36 36"><path d="M18 2a16 16 0 1 1-16 16" fill="none" stroke="#1f2937" stroke-width="3"/><path d="M18 2a16 16 0 1 1-16 16" fill="none" stroke="#22d3ee" stroke-width="3" stroke-dasharray="80 100" stroke-linecap="round"/></svg></span>
+              </div>
+              <div class="tc-meta">Chromium 120 · 45%</div>
+            </div>
+            <div class="taskcard"><div class="tc-top"><span class="tag ai">AI</span><span class="tc-name">商品搜索</span></div><div class="tc-meta">Chromium · 70%</div></div>
+          </div>
+          <div class="col green" data-col="done">
+            <div class="col-head"><span class="col-dot"></span><b>已完成</b><span class="col-count">18</span></div>
+            <div class="taskcard"><div class="tc-top"><span class="tag ai">AI</span><span class="tc-name">购物车流程</span><span style="margin-left:auto;color:var(--green);font-size:12px">✓</span></div><div class="tc-meta">Firefox 115 · 12m · 100%</div></div>
+            <div class="taskcard"><div class="tc-top"><span class="tag browser">浏览器</span><span class="tc-name">用户管理</span><span style="margin-left:auto;color:var(--green);font-size:12px">✓</span></div><div class="tc-meta">Chromium 120 · 1h · 100%</div></div>
+            <div class="taskcard"><div class="tc-top"><span class="tag ai">AI</span><span class="tc-name">登录测试</span><span style="margin-left:auto;color:var(--green);font-size:12px">✓</span></div><div class="tc-meta">Chromium · 3h · 100%</div></div>
+          </div>
+          <div class="col red" data-col="failed">
+            <div class="col-head"><span class="col-dot"></span><b>失败</b><span class="col-count">5</span></div>
+            <div class="taskcard"><div class="tc-top"><span class="tag ai">AI</span><span class="tc-name">支付测试</span><span style="margin-left:auto;color:var(--red);font-size:12px">✕</span></div><div class="tc-meta">Edge 118 · 30m · 3/3 重试</div></div>
+            <div class="taskcard"><div class="tc-top"><span class="tag browser">浏览器</span><span class="tc-name">API 网关</span><span style="margin-left:auto;color:var(--red);font-size:12px">✕</span></div><div class="tc-meta">Chromium · 2h · 超时</div></div>
+          </div>
+        </div>
+        <p style="color:var(--text3);font-size:11px;margin-top:14px" class="mono">提示：拖拽卡片可在列之间移动更新任务状态（原型演示）</p>
+      </section>
+
+      <!-- ===== AI 录制 ===== -->
+      <section class="page" id="page-ai">
+        <div class="page-title"><span class="tag cyan" style="border-radius:5px">AI 录制中</span> 会话 <span class="mono" style="color:var(--text3);font-size:13px">sess_a1b2</span> <span style="margin-left:auto;font-size:13px;color:var(--text2)" class="mono">步骤 5 / 25</span></div>
+        <div class="ai-banner">
+          <span class="spin"></span>
+          <div>
+            <div style="font-size:13.5px;font-weight:500">任务：登录系统并创建一笔测试订单</div>
+            <div style="font-size:11.5px;color:var(--text3)" class="mono">LLM 正在规划下一步…</div>
+          </div>
+        </div>
+        <div class="ai-wrap">
+          <div>
+            <div class="steps">
+              <div class="step running">
+                <span class="idx">5</span><span class="act">click</span>
+                <span class="desc">点击 <span style="color:var(--cyan)">[创建订单按钮]</span></span><span class="dur">00:02</span>
+              </div>
+              <div class="step done">
+                <span class="idx">4</span><span class="act">input</span>
+                <span class="desc">输入 <span style="color:var(--cyan)">[订单金额]</span> = "99.9"</span><span class="dur">00:01</span>
+              </div>
+              <div class="step done">
+                <span class="idx">3</span><span class="act">navigate</span>
+                <span class="desc">跳转 → <span style="color:var(--cyan)">/orders/new</span></span><span class="dur">00:03</span>
+              </div>
+              <div class="step done">
+                <span class="idx">2</span><span class="act">input</span>
+                <span class="desc">输入 <span style="color:var(--cyan)">[密码]</span> = "••••••"</span><span class="dur">00:01</span>
+              </div>
+              <div class="step done">
+                <span class="idx">1</span><span class="act">click</span>
+                <span class="desc">点击 <span style="color:var(--cyan)">[登录]</span></span><span class="dur">00:02</span>
+              </div>
+            </div>
+            <div class="llm-row"><span class="dots"><i></i><i></i><i></i></span> 已发现新元素，正在选择最佳定位器…</div>
+          </div>
+          <div class="browser-preview">
+            <div class="bp-bar"><span class="bp-dot"></span><span class="bp-dot"></span><span class="bp-dot"></span><span class="bp-url">https://demo.test.com/orders/new</span></div>
+            <div class="bp-body">
+              <div class="bp-mock">
+                <div style="font-size:15px;color:var(--text);margin-bottom:8px">新建订单</div>
+                <div class="m-input">订单金额 <span style="float:right;color:var(--text3)">99.9</span></div>
+                <div class="m-input">客户名称 <span style="float:right;color:var(--text3)">ACME 科技</span></div>
+                <span class="m-btn">提交订单</span>
+              </div>
+            </div>
+            <div class="bp-actions">
+              <button class="btn danger">停止</button>
+              <button class="btn primary" style="margin-left:auto">保存为录制项目</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 浏览器录制监控 ===== -->
+      <section class="page" id="page-browser">
+        <div class="page-title"><span class="tag red"><span class="status-dot" style="width:6px;height:6px"></span>录制中</span> 会话 <span class="mono" style="color:var(--text3);font-size:13px">#1024</span></div>
+        <div class="page-sub">浏览器已打开，您的操作将被实时捕获</div>
+        <div class="rec-top">
+          <div class="card">
+            <div style="display:flex;align-items:baseline;gap:12px">
+              <span class="rec-timer">00:03:42</span>
+              <span style="color:var(--text3)" class="mono">/ 00:10:00</span>
+              <span class="tag gray mono" style="margin-left:auto">iframe 2/2 ✓</span>
+            </div>
+            <div class="ctrl">
+              <button class="btn">暂停</button>
+              <button class="btn">清空</button>
+              <button class="btn primary">停止并保存</button>
+            </div>
+          </div>
+          <div class="card">
+            <h4 style="font-size:13px;margin-bottom:10px;color:var(--text2)">定位策略</h4>
+            <div class="sum-item"><span class="k">策略</span><span class="v">semantic_first</span></div>
+            <div class="sum-item"><span class="k">最大时长</span><span class="v">600s</span></div>
+            <div class="sum-item"><span class="k">悬停捕获</span><span class="v">1000ms</span></div>
+            <div class="sum-item"><span class="k">视频录制</span><span class="v" style="color:var(--green)">ON · MP4</span></div>
+          </div>
+        </div>
+        <div class="rec-body">
+          <div class="card">
+            <h4 style="font-size:13px;margin-bottom:10px;color:var(--text2)">已捕获步骤 <span class="mono" style="color:var(--cyan)">12</span></h4>
+            <div class="rec-list">
+              <div class="rec-item"><span class="no">#12</span><span class="type">click</span><span>用户名输入框</span><span class="sel">#username</span></div>
+              <div class="rec-item"><span class="no">#11</span><span class="type">input</span><span>密码输入框</span><span class="sel">input[name=pass]</span></div>
+              <div class="rec-item"><span class="no">#10</span><span class="type">click</span><span>登录按钮</span><span class="sel">button: 登录</span></div>
+              <div class="rec-item"><span class="no">#9</span><span class="type">navigate</span><span>→ /dashboard</span><span class="sel">url</span></div>
+              <div class="rec-item"><span class="no">#8</span><span class="type">scroll</span><span>页面滚动</span><span class="sel">y=1280</span></div>
+              <div class="rec-item"><span class="no">#7</span><span class="type">hover</span><span>用户菜单（悬停）</span><span class="sel">[role=menu]</span></div>
+            </div>
+            <div class="iframe-state"><b>已监听</b> 2 个 iframe · 主文档 + 支付弹窗</div>
+          </div>
+          <div class="card">
+            <h4 style="font-size:13px;margin-bottom:10px;color:var(--text2)">iframe 监听状态</h4>
+            <div class="iframe-item"><span>main · demo.test.com/login</span><span style="color:var(--green)">✓ 已监听</span></div>
+            <div class="iframe-item"><span>pay · pay.test.com</span><span style="color:var(--green)">✓ 已监听</span></div>
+            <div class="iframe-item"><span>ad · static.test.com</span><span style="color:var(--amber)">⚠ 未监听</span></div>
+            <div style="margin-top:14px;font-size:12px;color:var(--text3)">未监听的 iframe 内操作可能漏录，已用警告色提示。</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 执行监控 ===== -->
+      <section class="page" id="page-exec">
+        <div class="page-title">执行监控 <span class="mono" style="color:var(--text3);font-size:13px">task_20260829_001</span>
+          <span style="margin-left:auto" class="h-row">
+            <button class="btn danger">停止执行</button>
+            <button class="btn">查看报告</button>
+          </span>
+        </div>
+        <div class="page-sub">登录测试 · 实时执行状态</div>
+        <div class="exe-top">
+          <div class="h-row" style="margin-bottom:12px">
+            <span class="tag cyan"><span class="status-dot" style="width:6px;height:6px"></span>执行中</span>
+            <span style="font-size:12px;color:var(--text3)" class="mono">elapsed 12.3s · queue 1/1</span>
+          </div>
+          <div class="bar" style="margin-bottom:16px"><i style="width:80%"></i></div>
+          <div class="exe-grid">
+            <div class="exe-item"><div class="lbl">状态</div><div class="val" style="color:var(--cyan)">RUNNING</div></div>
+            <div class="exe-item"><div class="lbl">浏览器</div><div class="val">Chromium 120</div></div>
+            <div class="exe-item"><div class="lbl">重试</div><div class="val">0 / 3</div></div>
+            <div class="exe-item"><div class="lbl">开始时间</div><div class="val">14:30:25</div></div>
+          </div>
+        </div>
+        <div class="exe-main">
+          <div class="card">
+            <h4 style="font-size:13px;margin-bottom:10px;color:var(--text2)">实时日志</h4>
+            <div class="log" id="log">
+              <div><span class="t">14:30:25</span> <span class="info">[INFO] 开始执行测试任务</span></div>
+              <div><span class="t">14:30:26</span> <span class="info">[INFO] 正在打开页面 https://demo.test.com/login</span></div>
+              <div><span class="t">14:30:28</span> <span class="info">[INFO] 输入用户名 admin</span></div>
+              <div><span class="t">14:30:29</span> <span class="info">[INFO] 输入密码 ••••••</span></div>
+              <div><span class="t">14:30:32</span> <span class="info">[INFO] 点击登录按钮</span></div>
+              <div><span class="t">14:30:35</span> <span class="ok">[SUCCESS] 登录成功，跳转 /dashboard</span></div>
+              <div><span class="t">14:30:36</span> <span class="info">[INFO] 验证元素 [欢迎语]</span></div>
+              <div><span class="t">14:30:37</span> <span class="ok">[SUCCESS] 验证通过</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <h4 style="font-size:13px;margin-bottom:10px;color:var(--text2)">执行截图</h4>
+            <div class="shots">
+              <div class="shot"><span class="cap">step_1 登录页</span></div>
+              <div class="shot"><span class="cap">step_2 首页</span></div>
+              <div class="shot"><span class="cap">step_3 验证</span></div>
+              <div class="shot"><span class="cap">step_4 完成</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 报告详情 ===== -->
+      <section class="page" id="page-report">
+        <div class="page-title">测试报告 <span class="mono" style="color:var(--text3);font-size:13px">report_20260829_001</span>
+          <span style="margin-left:auto" class="h-row">
+            <button class="btn">导出 HTML</button>
+            <button class="btn primary">导出 PDF</button>
+          </span>
+        </div>
+        <div class="page-sub">登录测试 · 2026-08-29 14:30:25 ~ 14:30:37</div>
+        <div class="rpt-stats">
+          <div class="rpt-stat"><div class="num" style="color:var(--green)">100%</div><div class="lbl">通过率</div></div>
+          <div class="rpt-stat"><div class="num">8</div><div class="lbl">总步骤</div></div>
+          <div class="rpt-stat"><div class="num" style="color:var(--green)">8</div><div class="lbl">通过</div></div>
+          <div class="rpt-stat"><div class="num" style="color:var(--cyan)">12.3s</div><div class="lbl">耗时</div></div>
+        </div>
+        <div class="rpt-main">
+          <div class="rpt-card">
+            <h4>执行趋势</h4>
+            <div class="chart" id="chart">
+              <div class="barx"><div class="b" style="height:40%"></div><span class="x">08-25</span></div>
+              <div class="barx"><div class="b" style="height:62%"></div><span class="x">08-26</span></div>
+              <div class="barx"><div class="b" style="height:55%"></div><span class="x">08-27</span></div>
+              <div class="barx"><div class="b" style="height:78%"></div><span class="x">08-28</span></div>
+              <div class="barx"><div class="b" style="height:100%"></div><span class="x">08-29</span></div>
+            </div>
+          </div>
+          <div class="rpt-card">
+            <h4>测试摘要</h4>
+            <div class="sum-list">
+              <div class="sum-item"><span class="k">任务名称</span><span class="v">登录测试_20260829</span></div>
+              <div class="sum-item"><span class="k">浏览器</span><span class="v">Chromium 120</span></div>
+              <div class="sum-item"><span class="k">录制类型</span><span class="v">浏览器录制</span></div>
+              <div class="sum-item"><span class="k">状态</span><span class="v" style="color:var(--green)">通过</span></div>
+              <div class="sum-item"><span class="k">视频</span><span class="v">video.mp4</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="video">
+          <div class="play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+        </div>
+        <div class="rpt-card">
+          <h4>步骤详情</h4>
+          <table>
+            <thead><tr><th>步骤</th><th>操作</th><th>状态</th><th>耗时</th><th>截图</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">1</td><td>打开登录页</td><td><span class="tag green">通过</span></td><td class="mono">1.2s</td><td><span class="mini"></span></td></tr>
+              <tr><td class="mono">2</td><td>输入用户名</td><td><span class="tag green">通过</span></td><td class="mono">0.5s</td><td><span class="mini"></span></td></tr>
+              <tr><td class="mono">3</td><td>输入密码</td><td><span class="tag green">通过</span></td><td class="mono">0.4s</td><td><span class="mini"></span></td></tr>
+              <tr><td class="mono">4</td><td>点击登录</td><td><span class="tag green">通过</span></td><td class="mono">0.8s</td><td><span class="mini"></span></td></tr>
+              <tr><td class="mono">5</td><td>验证跳转</td><td><span class="tag green">通过</span></td><td class="mono">0.3s</td><td><span class="mini"></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== 录制项目 ===== -->
+      <section class="page" id="page-projects">
+        <div class="page-title">录制项目
+          <span style="margin-left:auto" class="h-row">
+            <button class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>新建项目</button>
+          </span>
+        </div>
+        <div class="page-sub">AI 录制与浏览器录制统一管理 · 共 5 个项目</div>
+        <div class="proj-grid">
+          <div class="proj">
+            <div class="top"><span class="proj-ico" style="background:rgba(139,92,246,.14);color:#a78bfa">AI</span><span class="name">登录测试</span><span class="tag green" style="margin-left:auto">就绪</span></div>
+            <div class="desc">用户登录流程冒烟，验证跳转与欢迎语。</div>
+            <div class="meta"><span class="mono">08-29</span> · <span>AI 录制</span> · <span>3 任务</span></div>
+            <div class="actions"><button class="btn" style="padding:5px 10px;font-size:12px">创建任务</button><button class="btn ghost" style="padding:5px 8px">编辑</button><button class="btn ghost" style="padding:5px 8px">删除</button></div>
+          </div>
+          <div class="proj">
+            <div class="top"><span class="proj-ico" style="background:rgba(16,185,129,.14);color:#34d399">🌐</span><span class="name">购物车流程</span><span class="tag green" style="margin-left:auto">就绪</span></div>
+            <div class="desc">加入购物车、修改数量、结算全流程。</div>
+            <div class="meta"><span class="mono">08-28</span> · <span>浏览器录制</span> · <span>2 任务</span></div>
+            <div class="actions"><button class="btn" style="padding:5px 10px;font-size:12px">创建任务</button><button class="btn ghost" style="padding:5px 8px">编辑</button><button class="btn ghost" style="padding:5px 8px">删除</button></div>
+          </div>
+          <div class="proj">
+            <div class="top"><span class="proj-ico" style="background:rgba(245,158,11,.14);color:#fbbf24">AI</span><span class="name">支付测试</span><span class="tag amber" style="margin-left:auto">草稿</span></div>
+            <div class="desc">三方支付回调与订单状态校验。</div>
+            <div class="meta"><span class="mono">08-27</span> · <span>AI 录制</span> · <span>0 任务</span></div>
+            <div class="actions"><button class="btn" style="padding:5px 10px;font-size:12px" disabled>创建任务</button><button class="btn ghost" style="padding:5px 8px">编辑</button><button class="btn ghost" style="padding:5px 8px">删除</button></div>
+          </div>
+          <div class="proj">
+            <div class="top"><span class="proj-ico" style="background:rgba(139,92,246,.14);color:#a78bfa">AI</span><span class="name">注册流程</span><span class="tag green" style="margin-left:auto">就绪</span></div>
+            <div class="desc">新用户注册、邮箱验证、资料完善。</div>
+            <div class="meta"><span class="mono">08-27</span> · <span>AI 录制</span> · <span>1 任务</span></div>
+            <div class="actions"><button class="btn" style="padding:5px 10px;font-size:12px">创建任务</button><button class="btn ghost" style="padding:5px 8px">编辑</button><button class="btn ghost" style="padding:5px 8px">删除</button></div>
+          </div>
+          <div class="proj">
+            <div class="top"><span class="proj-ico" style="background:rgba(236,72,153,.14);color:#f472b6">🌐</span><span class="name">订单查询</span><span class="tag gray" style="margin-left:auto">归档</span></div>
+            <div class="desc">历史订单查询与状态筛选。</div>
+            <div class="meta"><span class="mono">08-26</span> · <span>浏览器录制</span> · <span>0 任务</span></div>
+            <div class="actions"><button class="btn" style="padding:5px 10px;font-size:12px" disabled>创建任务</button><button class="btn ghost" style="padding:5px 8px">编辑</button><button class="btn ghost" style="padding:5px 8px">删除</button></div>
+          </div>
+        </div>
+        <div class="entry-banner">
+          <div class="entry">
+            <div><div class="e-t">开始 AI 录制</div><div class="e-d">自然语言描述任务，AI 自主探索生成脚本</div></div>
+            <button class="btn primary">去录制</button>
+          </div>
+          <div class="entry">
+            <div><div class="e-t">开始浏览器录制</div><div class="e-d">手动操作，系统精确捕获并生成步骤</div></div>
+            <button class="btn">去录制</button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== 导航切换 =====
+  const crumbMap={dashboard:"测试任务",ai:"AI 录制",browser:"浏览器录制",exec:"执行监控",report:"测试报告",projects:"录制项目",plans:"测试计划"};
+  document.querySelectorAll('.nav-item[data-page]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+      el.classList.add('active');
+      const pg=document.getElementById(el.dataset.page);
+      pg.classList.add('active');
+      document.getElementById('crumb').textContent=crumbMap[el.dataset.page.replace('page-','')]||'';
+      document.querySelector('.content').scrollTop=0;
+    });
+  });
+
+  // ===== 看板拖拽（原型演示） =====
+  const cards=document.querySelectorAll('.taskcard[draggable]');
+  cards.forEach(c=>{
+    c.addEventListener('dragstart',e=>{c.classList.add('dragging');e.dataTransfer.setData('text/plain','');});
+    c.addEventListener('dragend',()=>c.classList.remove('dragging'));
+  });
+  document.querySelectorAll('.col').forEach(col=>{
+    col.addEventListener('dragover',e=>{e.preventDefault();col.classList.add('hover');});
+    col.addEventListener('dragleave',()=>col.classList.remove('hover'));
+    col.addEventListener('drop',e=>{
+      e.preventDefault();col.classList.remove('hover');
+      const d=document.querySelector('.dragging');
+      if(d){col.appendChild(d);col.querySelector('.col-count').textContent=col.querySelectorAll('.taskcard').length;}
+    });
+  });
+
+  // ===== 执行监控日志自动追加（演示） =====
+  const logEl=document.getElementById('log');
+  const logs=[
+    ['14:30:38','info','[INFO] 等待断言 目标URL 匹配'],
+    ['14:30:39','ok','[SUCCESS] 断言通过'],
+    ['14:30:40','info','[INFO] 正在生成报告…'],
+    ['14:30:41','ok','[SUCCESS] 任务完成，报告已生成']
+  ];
+  let li=0;
+  setInterval(()=>{
+    if(li<logs.length&&document.getElementById('page-exec').classList.contains('active')){
+      const [t,lv,msg]=logs[li++];
+      const div=document.createElement('div');
+      div.innerHTML='<span class="t">'+t+'</span> <span class="'+(lv==='ok'?'ok':'info')+'">'+msg+'</span>';
+      logEl.appendChild(div);logEl.scrollTop=logEl.scrollHeight;
+    }
+  },1800);
+</script>
+</body>
+</html>

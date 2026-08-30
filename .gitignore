@@ -1,0 +1,31 @@
+node_modules/
+dist/
+*.log
+.env
+reports/
+screenshots/
+
+# 运行数据（DB / 截图 / 视频 / 录制 / 导出 / 上传）
+data/
+output/
+static/uploads/
+static/videos/
+gui-test-screenshots/
+
+# 本地一次性脚本与补丁
+_*.py
+_*.js
+
+# 媒体与压缩包（体积大，不入库）
+*.webm
+*.mp4
+*.zip
+
+# 构建
+build/
+*.tsbuildinfo
+
+# IDE / 会话
+.idea/
+.vscode/
+.zcode/

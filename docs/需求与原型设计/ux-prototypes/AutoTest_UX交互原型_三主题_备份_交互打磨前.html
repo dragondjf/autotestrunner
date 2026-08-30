@@ -1,0 +1,1628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoTest · UX 交互原型（三主题）</title>
+<style>
+  /* ============ 主题变量 ============ */
+  :root, body[data-theme="dark"]{
+    --bg:#0a0a0c; --panel:#121216; --panel2:#16161b; --border:#1f2937; --border2:#27272e;
+    --text:#e5e7eb; --text2:#9ca3af; --text3:#6b7280;
+    --primary:#22d3ee; --primary-text:#041014; --primary-dim:rgba(34,211,238,.12);
+    --success:#10b981; --danger:#ef4444; --warn:#f59e0b; --violet:#8b5cf6; --pink:#f472b6;
+    --side-bg:rgba(14,14,18,.92); --side-text:#9ca3af; --side-active:var(--cyan,#22d3ee);
+    --grid-a:rgba(34,211,238,.035);
+    --radius:8px; --radius-lg:10px; --shadow:none;
+    --input-bg:#1a1a20; --hover-bg:rgba(255,255,255,.05);
+    --tag-ai-bg:rgba(139,92,246,.14); --tag-ai-tx:#a78bfa;
+    --tag-br-bg:rgba(16,185,129,.13); --tag-br-tx:#34d399;
+  }
+  body[data-theme="light"]{
+    --bg:#f7f8fa; --panel:#ffffff; --panel2:#fbfbfd; --border:#e7e9ee; --border2:#d6dae2;
+    --text:#171717; --text2:#4d4d4d; --text3:#9ca3af;
+    --primary:#3b5bdb; --primary-text:#ffffff; --primary-dim:rgba(59,91,219,.08);
+    --success:#00a870; --danger:#e34d59; --warn:#ed7b2f; --violet:#6d5bd0; --pink:#e34d59;
+    --side-bg:#1b1f2a; --side-text:#9aa3b5; --side-active:#3b5bdb;
+    --grid-a:rgba(59,91,219,.05);
+    --radius:8px; --radius-lg:10px; --shadow:0 1px 2px rgba(16,24,40,.05);
+    --input-bg:#f6f7f9; --hover-bg:rgba(20,30,60,.04);
+    --tag-ai-bg:rgba(109,91,208,.10); --tag-ai-tx:#6d5bd0;
+    --tag-br-bg:rgba(0,168,112,.10); --tag-br-tx:#008a5e;
+  }
+  body[data-theme="vivid"]{
+    --bg:#faf9f6; --panel:#ffffff; --panel2:#fffdf9; --border:#efe9e0; --border2:#e0d7ca;
+    --text:#2a2a30; --text2:#6b7280; --text3:#9aa0a6;
+    --primary:#ff6b6b; --primary-text:#ffffff; --primary-dim:rgba(255,107,107,.10);
+    --success:#10b981; --danger:#ef4444; --warn:#f59e0b; --violet:#8b5cf6; --pink:#f472b6;
+    --side-bg:#fffdf9; --side-text:#7a7368; --side-active:#ff6b6b;
+    --grid-a:rgba(255,107,107,.04);
+    --radius:14px; --radius-lg:18px; --shadow:0 6px 20px -8px rgba(60,42,20,.14);
+    --input-bg:#f6f3ee; --hover-bg:rgba(255,107,107,.05);
+    --tag-ai-bg:rgba(139,92,246,.12); --tag-ai-tx:#7c3aed;
+    --tag-br-bg:rgba(16,185,129,.12); --tag-br-tx:#0d9f6e;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--text);font-size:14px;overflow:hidden;transition:background .25s}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:linear-gradient(var(--grid-a) 1px,transparent 1px),linear-gradient(90deg,var(--grid-a) 1px,transparent 1px);
+    background-size:32px 32px}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+  .app{display:flex;height:100vh;position:relative;z-index:1}
+  /* ===== 侧边栏 ===== */
+  .side{width:224px;min-width:224px;background:var(--side-bg);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;padding:16px 12px;transition:all .25s}
+  .logo{display:flex;align-items:center;gap:10px;padding:6px 10px 16px;margin-bottom:6px;border-bottom:1px solid var(--border)}
+  .logo-mark{width:30px;height:30px;border-radius:var(--radius);background:linear-gradient(135deg,var(--primary),var(--violet));
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:var(--primary-text)}
+  .logo-name{font-size:15px;font-weight:600;letter-spacing:-.3px}
+  .logo-sub{font-size:10px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;font-family:var(--mono)}
+  .nav-group{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;padding:14px 10px 6px;font-family:var(--mono)}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius);cursor:pointer;
+    color:var(--text2);font-size:13.5px;transition:all .15s;border:1px solid transparent}
+  .nav-item:hover{background:var(--hover-bg);color:var(--text)}
+  .nav-item.active{background:var(--primary-dim);color:var(--primary);border-color:var(--primary)}
+  .nav-item svg{width:16px;height:16px;flex-shrink:0}
+  .nav-badge{margin-left:auto;font-size:10px;font-family:var(--mono);background:var(--primary-dim);
+    color:var(--primary);padding:1px 7px;border-radius:99px}
+  .side-bottom{margin-top:auto;padding-top:12px;border-top:1px solid var(--border)}
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 6px var(--success);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+  /* ===== 主区 ===== */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{height:56px;min-height:56px;display:flex;align-items:center;gap:16px;padding:0 24px;
+    border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(10px)}
+  .crumb{font-size:13px;color:var(--text3);display:flex;gap:6px;align-items:center}
+  .crumb b{color:var(--text);font-weight:500}
+  .theme-switch{display:inline-flex;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:3px;gap:2px;margin-left:auto}
+  .theme-switch span{width:22px;height:22px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;transition:all .15s}
+  .theme-switch span.on{box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--primary)}
+  .ts-dark{background:#0a0a0c;color:#22d3ee}.ts-light{background:#f7f8fa;color:#3b5bdb}.ts-vivid{background:#ffd9d9;color:#ff6b6b}
+  .search{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);
+    border-radius:var(--radius);padding:7px 12px;width:240px;color:var(--text3)}
+  .search input{background:none;border:none;outline:none;color:var(--text);width:100%;font-size:13px}
+  .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--violet));
+    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--primary-text)}
+  .content{flex:1;overflow-y:auto;padding:24px}
+  .page{display:none;animation:fade .25s ease}
+  .page.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  .page-title{font-size:20px;font-weight:600;letter-spacing:-.5px;display:flex;align-items:center;gap:12px;margin-bottom:4px}
+  .page-sub{color:var(--text3);font-size:13px;margin-bottom:20px}
+  .h-row{display:flex;align-items:center;gap:12px}
+  .btn{display:inline-flex;align-items:center;gap:6px;border-radius:var(--radius);padding:8px 14px;font-size:13px;
+    cursor:pointer;transition:all .15s;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-weight:500;box-shadow:var(--shadow)}
+  .btn:hover{border-color:var(--border2);filter:brightness(1.04)}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-text);font-weight:600}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.danger{background:transparent;border-color:var(--danger);color:var(--danger)}
+  .btn.danger:hover{background:var(--danger);color:#fff}
+  .btn:active{transform:scale(.98)}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--text2)}
+  .btn.ghost:hover{background:var(--hover-bg)}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;box-shadow:var(--shadow)}
+  .tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:2px 8px;border-radius:99px;font-weight:500}
+  .tag.ai{background:var(--tag-ai-bg);color:var(--tag-ai-tx)}
+  .tag.browser{background:var(--tag-br-bg);color:var(--tag-br-tx)}
+  .tag.amber{background:color-mix(in srgb,var(--warn) 13%,transparent);color:var(--warn)}
+  .tag.cyan{background:var(--primary-dim);color:var(--primary)}
+  .tag.green{background:color-mix(in srgb,var(--success) 13%,transparent);color:var(--success)}
+  .tag.red{background:color-mix(in srgb,var(--danger) 13%,transparent);color:var(--danger)}
+  .tag.gray{background:color-mix(in srgb,var(--text3) 13%,transparent);color:var(--text3)}
+  .bar{height:4px;border-radius:99px;background:var(--border2);overflow:hidden}
+  .bar>i{display:block;height:100%;border-radius:99px;background:var(--primary);transition:width .6s ease}
+
+  /* ===== 看板 ===== */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+  .stat{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;box-shadow:var(--shadow)}
+  .stat .num{font-size:28px;font-weight:600;letter-spacing:-1px;font-family:var(--mono)}
+  .stat .lbl{font-size:12px;color:var(--text3);margin-top:2px}
+  .stat .delta{font-size:11px;font-family:var(--mono);margin-top:6px}
+  .up{color:var(--success)} .down{color:var(--danger)} .flat{color:var(--text3)}
+  .seg{display:inline-flex;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:3px;gap:2px}
+  .seg span{padding:5px 14px;border-radius:6px;font-size:12.5px;color:var(--text2);cursor:pointer}
+  .seg span.on{background:var(--primary-dim);color:var(--primary)}
+  .board{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .col{background:color-mix(in srgb,var(--panel) 60%,transparent);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px;min-height:380px}
+  .col-head{display:flex;align-items:center;gap:8px;padding:6px 8px 12px}
+  .col-dot{width:8px;height:8px;border-radius:50%}
+  .col-head b{font-size:13px;font-weight:600}
+  .col-count{font-size:11px;font-family:var(--mono);background:var(--panel2);color:var(--text3);padding:1px 8px;border-radius:99px}
+  .taskcard{background:var(--panel2);border:1px solid var(--border);border-left:3px solid var(--border2);
+    border-radius:var(--radius);padding:11px;margin-bottom:9px;cursor:grab;transition:all .15s;box-shadow:var(--shadow)}
+  .taskcard:hover{transform:translateY(-1px);border-color:var(--border2)}
+  .tc-top{display:flex;align-items:center;gap:6px;margin-bottom:7px}
+  .tc-name{font-size:13px;font-weight:600}
+  .tc-meta{font-size:11px;color:var(--text3);display:flex;align-items:center;gap:8px;font-family:var(--mono)}
+  .taskcard.dragging{opacity:.4}
+  .col.amber .col-dot{background:var(--warn)} .col.amber .taskcard{border-left-color:var(--warn)}
+  .col.cyan .col-dot{background:var(--primary)} .col.cyan .taskcard{border-left-color:var(--primary)}
+  .col.green .col-dot{background:var(--success)} .col.green .taskcard{border-left-color:var(--success)}
+  .col.red .col-dot{background:var(--danger)} .col.red .taskcard{border-left-color:var(--danger)}
+  .col.hover{border-color:var(--primary)}
+
+  /* 任务列表（隐藏视图） */
+  .tasktable{display:none;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+  .tasktable.show{display:block}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;padding:10px 14px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);font-size:11.5px;background:var(--panel2)}
+  td{padding:10px 14px;border-bottom:1px solid color-mix(in srgb,var(--border) 60%,transparent);color:var(--text2)}
+  td .mini{width:64px;height:40px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;display:inline-block;vertical-align:middle}
+
+  /* ===== AI 录制 ===== */
+  .ai-wrap{display:grid;grid-template-columns:1fr 400px;gap:16px}
+  .ai-banner{background:linear-gradient(90deg,var(--primary-dim),transparent);border:1px solid var(--primary);
+    border-radius:var(--radius-lg);padding:12px 16px;display:flex;align-items:center;gap:12px;margin-bottom:16px}
+  .spin{width:22px;height:22px;border:2px solid color-mix(in srgb,var(--primary) 25%,transparent);border-top-color:var(--primary);border-radius:50%;animation:rot 1s linear infinite;flex-shrink:0}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .steps{display:flex;flex-direction:column;gap:8px}
+  .step{display:flex;gap:12px;padding:10px 12px;border-radius:var(--radius);background:var(--panel);border:1px solid var(--border);
+    align-items:flex-start;opacity:.85;box-shadow:var(--shadow)}
+  .step .idx{font-family:var(--mono);font-size:11px;color:var(--text3);width:18px;flex-shrink:0;text-align:right;line-height:20px}
+  .step .act{font-family:var(--mono);font-size:11.5px;color:var(--primary);width:74px;flex-shrink:0;line-height:20px;font-weight:500}
+  .step .desc{font-size:13px;line-height:20px}
+  .step .dur{margin-left:auto;font-size:11px;color:var(--text3);font-family:var(--mono)}
+  .step.done{border-color:color-mix(in srgb,var(--success) 25%,transparent);background:color-mix(in srgb,var(--success) 4%,var(--panel))}
+  .step.done .idx{color:var(--success)}
+  .step.running{border-color:var(--primary);background:var(--primary-dim);opacity:1}
+  .step.running .idx{color:var(--primary)}
+  .llm-row{display:flex;align-items:center;gap:10px;color:var(--text2);font-size:12.5px;padding:10px 12px}
+  .dots{display:inline-flex;gap:4px}
+  .dots i{width:5px;height:5px;border-radius:50%;background:var(--primary);animation:blink 1.2s infinite}
+  .dots i:nth-child(2){animation-delay:.2s}.dots i:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
+  .browser-preview{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+  .bp-bar{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--panel2)}
+  .bp-dot{width:10px;height:10px;border-radius:50%;background:var(--border2)}
+  .bp-dot:nth-child(1){background:var(--danger)}.bp-dot:nth-child(2){background:var(--warn)}.bp-dot:nth-child(3){background:var(--success)}
+  .bp-url{flex:1;font-size:11px;font-family:var(--mono);color:var(--text3);text-align:center;background:var(--input-bg);border-radius:5px;padding:3px}
+  .bp-body{flex:1;min-height:360px;display:flex;align-items:center;justify-content:center;background:var(--input-bg)}
+  .bp-mock{width:80%;text-align:center;opacity:.55}
+  .m-input{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px;margin:6px auto;width:70%}
+  .m-btn{display:inline-block;background:var(--primary);color:var(--primary-text);padding:7px 18px;border-radius:6px;font-weight:600;margin-top:6px}
+  .bp-actions{display:flex;gap:10px;padding:12px;border-top:1px solid var(--border);background:var(--panel2)}
+
+  /* ===== 浏览器录制 ===== */
+  .rec-top{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:16px}
+  .rec-timer{font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-1px}
+  .rec-timer.warn{color:var(--warn)}
+  .ctrl{display:flex;gap:10px;margin-top:14px}
+  .rec-body{display:grid;grid-template-columns:1.6fr 1fr;gap:16px}
+  .rec-list{display:flex;flex-direction:column;gap:6px;max-height:400px;overflow-y:auto}
+  .rec-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);border:1px solid var(--border);
+    border-radius:var(--radius);font-size:12.5px}
+  .rec-item .no{font-family:var(--mono);color:var(--text3);font-size:11px;width:26px}
+  .rec-item .type{font-family:var(--mono);font-size:11px;color:var(--primary);width:64px}
+  .rec-item .sel{color:var(--text3);font-size:11px;font-family:var(--mono);margin-left:auto}
+  .iframe-item{display:flex;justify-content:space-between;font-size:12px;color:var(--text2);padding:7px 0;border-bottom:1px dashed var(--border)}
+
+  /* ===== 执行监控 ===== */
+  .exe-top{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;box-shadow:var(--shadow)}
+  .exe-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  .exe-item .lbl{font-size:11px;color:var(--text3);margin-bottom:3px}
+  .exe-item .val{font-size:15px;font-weight:600;font-family:var(--mono)}
+  .exe-main{display:grid;grid-template-columns:1.5fr 1fr;gap:16px}
+  .log{font-family:var(--mono);font-size:12px;line-height:1.9;max-height:400px;overflow-y:auto;background:var(--input-bg);
+    border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px}
+  .log .t{color:var(--text3)} .log .ok{color:var(--success)} .log .info{color:var(--text2)} .log .err{color:var(--danger)}
+  .shots{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .shot{aspect-ratio:4/3;background:var(--input-bg);border:1px solid var(--border);border-radius:var(--radius);position:relative;overflow:hidden}
+  .shot::after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,var(--primary-dim),transparent 40%,color-mix(in srgb,var(--violet) 6%,transparent))}
+  .shot::before{content:"";position:absolute;inset:12%;border:1px solid color-mix(in srgb,var(--text3) 15%,transparent);border-radius:4px}
+  .shot .cap{position:absolute;bottom:0;left:0;right:0;padding:14px 10px 7px;font-size:11px;color:var(--text3);
+    background:linear-gradient(transparent,color-mix(in srgb,var(--bg) 80%,transparent));font-family:var(--mono)}
+
+  /* ===== 报告 ===== */
+  .rpt-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+  .rpt-stat{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;box-shadow:var(--shadow)}
+  .rpt-stat .num{font-size:26px;font-weight:600;font-family:var(--mono);letter-spacing:-1px}
+  .rpt-stat .lbl{font-size:12px;color:var(--text3);margin-top:2px}
+  .rpt-main{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:16px}
+  .rpt-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;box-shadow:var(--shadow)}
+  .rpt-card h4{font-size:13px;margin-bottom:12px;color:var(--text2);font-weight:600;letter-spacing:-.2px}
+  .chart{position:relative;height:170px;display:flex;align-items:flex-end;gap:8px;padding-top:10px}
+  .barx{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .barx .b{width:60%;background:linear-gradient(180deg,color-mix(in srgb,var(--primary) 65%,transparent),var(--primary-dim));border-radius:4px 4px 0 0}
+  .barx .x{font-size:10px;color:var(--text3);font-family:var(--mono)}
+  .sum-list{display:flex;flex-direction:column;gap:9px}
+  .sum-item{display:flex;justify-content:space-between;font-size:12.5px;padding-bottom:9px;border-bottom:1px dashed var(--border)}
+  .sum-item .k{color:var(--text3)} .sum-item .v{color:var(--text);font-family:var(--mono)}
+  .video{background:var(--input-bg);border:1px solid var(--border);border-radius:var(--radius-lg);aspect-ratio:16/7;margin-bottom:16px;
+    display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+  .video::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,var(--primary-dim),transparent 70%)}
+  .play{width:56px;height:56px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;z-index:2}
+  .play:hover{transform:scale(1.08)}
+  .play svg{width:20px;height:20px;fill:var(--primary-text);margin-left:3px}
+
+  /* ===== 项目 ===== */
+  .proj-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .proj{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow)}
+  .proj:hover{transform:translateY(-2px);border-color:var(--primary)}
+  .proj .top{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+  .proj-ico{width:34px;height:34px;border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:15px}
+  .proj .name{font-size:14px;font-weight:600}
+  .proj .desc{font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.6}
+  .proj .meta{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text3);font-family:var(--mono)}
+  .proj .actions{display:flex;gap:6px;margin-top:12px;opacity:0;transition:opacity .15s}
+  .proj:hover .actions{opacity:1}
+  .entry-banner{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px}
+  .entry{background:linear-gradient(135deg,var(--primary-dim),color-mix(in srgb,var(--violet) 6%,transparent));border:1px dashed var(--primary);
+    border-radius:var(--radius-lg);padding:18px;display:flex;align-items:center;gap:14px}
+  .e-t{font-size:14px;font-weight:600}.e-d{font-size:12px;color:var(--text3);margin-top:3px}
+  .entry .btn{margin-left:auto}
+
+  /* ===== 录制创建 ===== */
+  .create-wrap{max-width:680px;margin:0 auto}
+  .create-form{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;box-shadow:var(--shadow)}
+  .field{margin-bottom:18px}
+  .field label{display:block;font-size:12.5px;font-weight:500;margin-bottom:7px;color:var(--text2)}
+  .field label i{color:var(--danger);font-style:normal}
+  .field input,.field textarea{width:100%;background:var(--input-bg);border:1px solid var(--border);border-radius:var(--radius);
+    padding:10px 12px;color:var(--text);font-size:13px;outline:none;transition:all .15s;font-family:inherit}
+  .field input:focus,.field textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-dim)}
+  .field textarea{min-height:110px;resize:vertical}
+  .type-seg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .type-card{border:1px solid var(--border);border-radius:var(--radius);padding:14px;cursor:pointer;transition:all .15s;background:var(--panel2)}
+  .type-card:hover{border-color:var(--border2)}
+  .type-card.on{border-color:var(--primary);background:var(--primary-dim)}
+  .type-card .t-ico{font-size:18px;margin-bottom:6px}
+  .type-card .t-name{font-weight:600;font-size:13.5px}
+  .type-card .t-desc{font-size:11.5px;color:var(--text3);margin-top:3px}
+
+  /* ===== 交互调试 ===== */
+  .debug-wrap{display:grid;grid-template-columns:1fr 420px;gap:16px}
+  .dbg-step{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:7px;font-size:12.5px}
+  .dbg-step .run{margin-left:auto}
+  .dbg-step .st{font-size:11px;font-family:var(--mono);color:var(--success)}
+  .dbg-log{font-family:var(--mono);font-size:12px;line-height:1.9;max-height:380px;overflow-y:auto;background:var(--input-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px}
+  .dbg-log .t{color:var(--text3)} .dbg-log .ok{color:var(--success)} .dbg-log .err{color:var(--danger)}
+  .hotkey{display:flex;justify-content:space-between;font-size:12px;color:var(--text2);padding:6px 0;border-bottom:1px dashed var(--border)}
+  .hotkey kbd{font-family:var(--mono);background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:11px}
+
+  /* ===== 真实界面嵌入 ===== */
+  .embed-frame{border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;background:var(--panel);
+    box-shadow:var(--shadow);height:calc(100vh - 220px);min-height:560px;position:relative}
+  .embed-frame iframe{width:100%;height:100%;border:0;display:block;background:#f1f1f1}
+
+  /* ========== UX 交互细化：任务/计划/报告 新增样式 ========== */
+  /* 工具栏与筛选 */
+  .toolbar{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+  .tb-search{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:7px 12px;color:var(--text3);width:230px;flex-shrink:0}
+  .tb-search input{background:none;border:none;outline:none;color:var(--text);width:100%;font-size:13px}
+  .tb-search:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-dim)}
+  .filter-chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--border);border-radius:99px;padding:5px 12px;font-size:12px;color:var(--text2);cursor:pointer;transition:all .15s}
+  .filter-chip:hover{border-color:var(--border2);color:var(--text)}
+  .filter-chip.on{background:var(--primary-dim);color:var(--primary);border-color:var(--primary)}
+  .filter-chip .cnt{font-size:10px;font-family:var(--mono);background:var(--panel2);padding:0 6px;border-radius:99px;line-height:15px}
+  .filter-chip.on .cnt{background:var(--primary);color:var(--primary-text)}
+  .fc-group{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+
+  /* 空态 */
+  .empty-state{padding:46px 20px;text-align:center;color:var(--text3);font-size:13px}
+  .empty-state .e-ico{font-size:30px;margin-bottom:10px;opacity:.5}
+
+  /* 抽屉（任务详情 / 计划详情） */
+  .drawer-mask{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
+  .drawer-mask.show{opacity:1;pointer-events:auto}
+  .drawer{position:fixed;top:0;right:-462px;width:440px;height:100vh;background:var(--panel);border-left:1px solid var(--border);
+    transition:right .28s cubic-bezier(.22,.9,.3,1);z-index:50;display:flex;flex-direction:column;box-shadow:-12px 0 40px rgba(0,0,0,.3)}
+  .drawer.show{right:0}
+  .drawer-head{display:flex;align-items:center;gap:10px;padding:18px 20px;border-bottom:1px solid var(--border)}
+  .drawer-head h3{font-size:15px;font-weight:600}
+  .drawer-x{margin-left:auto;cursor:pointer;color:var(--text3);font-size:20px;padding:2px 6px;border-radius:6px}
+  .drawer-x:hover{background:var(--hover-bg);color:var(--text)}
+  .drawer-body{flex:1;overflow-y:auto;padding:18px 20px}
+  .drawer-sec{font-size:10.5px;color:var(--text3);letter-spacing:.07em;text-transform:uppercase;font-family:var(--mono);margin:18px 0 8px}
+  .drawer-sec:first-child{margin-top:0}
+  .detail-item{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:7px 0;border-bottom:1px dashed var(--border)}
+  .detail-item .k{color:var(--text3)} .detail-item .v{color:var(--text);font-family:var(--mono)}
+  .drawer-foot{padding:15px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+
+  /* 计划卡片 */
+  .plan-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .plan{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;box-shadow:var(--shadow);transition:all .15s;cursor:pointer}
+  .plan:hover{transform:translateY(-2px);border-color:var(--primary)}
+  .plan .p-top{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .plan .p-name{font-size:14px;font-weight:600}
+  .plan .p-cron{font-size:11px;font-family:var(--mono);color:var(--text3);background:var(--input-bg);border:1px solid var(--border);border-radius:5px;padding:1px 7px}
+  .plan .p-desc{font-size:12px;color:var(--text3);margin-bottom:12px}
+  .plan .p-progress{margin:12px 0 6px}
+  .plan .p-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);font-family:var(--mono)}
+  .plan .p-tasks{display:flex;flex-wrap:wrap;gap:5px;margin-top:12px}
+  .pt-chip{font-size:10.5px;font-family:var(--mono);background:var(--input-bg);border:1px solid var(--border);border-radius:5px;padding:2px 8px;color:var(--text2)}
+  .plan .p-actions{display:flex;gap:6px;margin-top:13px;border-top:1px solid var(--border);padding-top:12px}
+  .p-mini{font-size:11px;color:var(--text3);font-family:var(--mono)}
+
+  /* 弹窗（新建计划 / 参数表单） */
+  .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:60}
+  .modal-mask.show{opacity:1;pointer-events:auto}
+  .modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-46%) scale(.97);width:580px;max-width:92vw;max-height:86vh;overflow-y:auto;
+    background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);z-index:61;opacity:0;pointer-events:none;transition:all .2s;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+  .modal.show{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}
+  .modal-head{display:flex;align-items:center;gap:10px;padding:17px 22px;border-bottom:1px solid var(--border)}
+  .modal-head h3{font-size:15px;font-weight:600}
+  .modal-x{margin-left:auto;cursor:pointer;color:var(--text3);font-size:20px;padding:2px 6px;border-radius:6px}
+  .modal-x:hover{background:var(--hover-bg);color:var(--text)}
+  .modal-body{padding:20px 22px}
+  .modal-foot{padding:15px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
+  .field{margin-bottom:16px}
+  .field label{display:block;font-size:12px;font-weight:500;margin-bottom:6px;color:var(--text2)}
+  .field label i{color:var(--danger);font-style:normal}
+  .field input,.field select,.field textarea{width:100%;background:var(--input-bg);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;color:var(--text);font-size:13px;outline:none;font-family:inherit;transition:all .15s}
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-dim)}
+  .f-row{display:flex;gap:12px}
+  .f-row .field{flex:1}
+  .switch-line{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text2);padding:8px 0}
+  .pick-list{display:flex;flex-direction:column;gap:5px;max-height:230px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px;background:var(--input-bg)}
+  .pick-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:12.5px;transition:all .12s;background:var(--panel);border:1px solid transparent}
+  .pick-item:hover{border-color:var(--border2)}
+  .pick-item.sel{border-color:var(--primary);background:var(--primary-dim);color:var(--primary)}
+  .pick-item .grip{color:var(--text3);font-size:12px;cursor:grab;flex-shrink:0}
+  .pick-item .p-order{width:20px;font-family:var(--mono);font-size:11px;color:var(--text3);flex-shrink:0;text-align:center}
+
+  /* 列表：批量/排序/分页 */
+  .list-tools{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:var(--text3)}
+  .list-tools .grow{flex:1}
+  .list-tools b{color:var(--primary);font-family:var(--mono)}
+  .pager{display:flex;align-items:center;gap:6px;padding:12px 14px;justify-content:flex-end}
+  .pager .pg{min-width:26px;height:26px;padding:0 7px;border-radius:6px;border:1px solid var(--border);background:var(--panel2);color:var(--text2);font-size:12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+  .pager .pg:hover{border-color:var(--border2)}
+  .pager .pg.on{background:var(--primary);color:var(--primary-text);border-color:var(--primary)}
+  .pager .pg:disabled{opacity:.4;cursor:not-allowed}
+  th.sortable{cursor:pointer;user-select:none}
+  th.sortable:hover{color:var(--primary)}
+  th .sort-arrow{font-size:10px;color:var(--text3)}
+
+  /* 报告增强 */
+  .rpt-grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+  .donut-wrap{display:flex;align-items:center;gap:26px}
+  .donut{width:118px;height:118px;border-radius:50%;flex-shrink:0;
+    background:conic-gradient(var(--success) 0 100%,var(--border2) 100%);display:flex;align-items:center;justify-content:center;position:relative}
+  .donut::before{content:"";position:absolute;inset:15px;border-radius:50%;background:var(--panel)}
+  .donut b{position:relative;font-size:21px;font-family:var(--mono);letter-spacing:-1px}
+  .donut b small{font-size:11px;color:var(--text3)}
+  .donut-legend{display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--text2)}
+  .donut-legend .dl{display:flex;align-items:center;gap:8px}
+  .dl i{width:9px;height:9px;border-radius:50%}
+  .trend-tools{margin-bottom:10px}
+  .trend-tools .seg span{padding:4px 12px;font-size:11.5px}
+  .rpt-tag{font-size:10.5px;font-family:var(--mono);color:var(--text3);background:var(--input-bg);border:1px solid var(--border);border-radius:5px;padding:1px 7px}
+  .step-detail{display:none;background:var(--input-bg);border:1px dashed var(--border);border-radius:var(--radius);padding:12px 14px;margin:4px 0 12px;font-size:12px;color:var(--text2)}
+  .step-detail.show{display:block}
+  .step-detail .sd-line{font-family:var(--mono);font-size:11.5px;padding:2px 0;color:var(--text2)}
+  .step-detail .sd-line .k{color:var(--text3);display:inline-block;min-width:52px}
+  .step-detail .sd-line.ok{color:var(--success)} .step-detail .sd-line.err{color:var(--danger)}
+  tr.step-row{cursor:pointer}
+  tr.step-row:hover td{background:var(--hover-bg)}
+  .fold-tip{font-size:11px;color:var(--text3);font-family:var(--mono)}
+
+  /* 视频播放交互 */
+  .vctrl{position:absolute;left:0;right:0;bottom:0;z-index:3;background:linear-gradient(transparent,rgba(0,0,0,.55));padding:20px 16px 12px;display:none;align-items:center;gap:12px}
+  .video.playing .vctrl{display:flex}
+  .v-time{font-family:var(--mono);font-size:11.5px;color:#fff}
+  .v-play{width:30px;height:30px;border-radius:50%;background:#fff;color:#000;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;flex-shrink:0}
+  .v-bar{flex:1;height:4px;border-radius:99px;background:rgba(255,255,255,.3);overflow:hidden;cursor:pointer}
+  .v-bar i{display:block;height:100%;width:34%;background:#fff;border-radius:99px}
+  .video.playing .play{opacity:0;transform:scale(.6)}
+
+  /* toast */
+  .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(24px);background:var(--panel);border:1px solid var(--primary);color:var(--text);font-size:13px;padding:10px 20px;border-radius:99px;opacity:0;pointer-events:none;transition:all .28s;z-index:80;box-shadow:0 10px 34px rgba(0,0,0,.3)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast small{color:var(--text3);margin-left:8px}
+
+  /* ========== 测试任务：分步表单 / 上传 / 历史回放 ========== */
+  /* 分步向导 */
+  .wizard{display:flex;align-items:center;gap:10px;max-width:760px;margin:0 auto 22px;padding:14px 18px;
+    background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow)}
+  .w-step{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:500;color:var(--text3);flex-shrink:0}
+  .w-step .w-no{width:24px;height:24px;border-radius:50%;border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:12px;font-family:var(--mono);transition:all .2s}
+  .w-step.on{color:var(--text)}
+  .w-step.on .w-no{background:var(--primary);border-color:var(--primary);color:var(--primary-text)}
+  .w-step.done .w-no{background:var(--success);border-color:var(--success);color:#fff}
+  .w-line{flex:1;height:1px;background:var(--border2);position:relative;min-width:20px}
+  .w-line::after{content:"";position:absolute;left:0;top:-1px;height:3px;background:var(--primary);width:0;transition:width .3s}
+  .w-line.done::after{width:100%}
+  .w-panel{display:none}
+  .w-panel.on{display:block;animation:fade .25s ease}
+
+  /* 上传区 */
+  .dropzone{border:1.5px dashed var(--border2);border-radius:var(--radius-lg);padding:26px 20px;text-align:center;
+    cursor:pointer;transition:all .15s;background:var(--input-bg)}
+  .dropzone:hover{border-color:var(--primary);background:var(--primary-dim)}
+  .dz-ico{font-size:26px;margin-bottom:8px;opacity:.8}
+  .dz-t{font-size:13px;font-weight:500;color:var(--text2)}
+  .dz-s{font-size:11.5px;color:var(--text3);margin-top:4px}
+  .file-chip{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    padding:8px 12px;margin-top:8px;font-size:12.5px}
+  .file-chip .fx{margin-left:auto;color:var(--text3);cursor:pointer;font-size:13px;padding:0 4px}
+  .file-chip .fx:hover{color:var(--danger)}
+  .res-list{margin-top:8px}
+  .res-list .file-chip{border-left:3px solid var(--primary)}
+
+  /* 历史列表 */
+  .hist-list{display:flex;flex-direction:column;gap:6px}
+  .hist-item{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--panel2);border:1px solid var(--border);
+    border-radius:var(--radius);font-size:12.5px;cursor:pointer;transition:all .12s}
+  .hist-item:hover{border-color:var(--primary)}
+  .hist-item .p-mini{margin-left:auto}
+  .hist-item .go{color:var(--text3);font-size:11px;font-family:var(--mono)}
+
+  /* 回放抽屉（加宽，与监控页同构） */
+  .drawer.wide{width:600px;right:-622px}
+  .drawer.wide.show{right:0}
+  .drawer .shots{margin-top:8px}
+  .drawer .log{margin-top:8px;max-height:200px}
+
+  /* 代码预览 */
+  .code-pre{background:var(--input-bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px;
+    font-family:var(--mono);font-size:12px;line-height:1.8;color:var(--text2);overflow-x:auto;white-space:pre}
+  .code-pre .cm{color:var(--text3)} .code-pre .kw{color:var(--violet)} .code-pre .st{color:var(--success)}
+
+  /* 调度类型卡 */
+  .type-seg.sch{grid-template-columns:repeat(3,1fr)}
+
+  .row-edit{cursor:pointer;color:var(--text3);padding:0 2px}
+  .row-edit:hover{color:var(--primary)}
+  .row-act{cursor:pointer;padding:0 2px}
+  .row-act:hover{color:var(--primary)}
+
+  .export-bar{display:none;align-items:center;gap:12px;margin-bottom:14px;padding:10px 14px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg)}
+  .export-bar.show{display:flex}
+</style>
+</head>
+<body data-theme="dark">
+<div class="app">
+  <aside class="side">
+    <div class="logo">
+      <div class="logo-mark">AT</div>
+      <div><div class="logo-name">AutoTest</div><div class="logo-sub">TestOps Console</div></div>
+    </div>
+    <div class="nav-group">工作台</div>
+    <div class="nav-item" data-page="page-projects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>录制项目</div>
+    <div class="nav-item active" data-page="page-dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 9h8M8 13h5M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>测试任务<span class="nav-badge">24</span></div>
+    <div class="nav-item" data-page="page-plans"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>测试计划</div>
+    <div class="nav-item" data-page="page-reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>测试报告</div>
+    <div class="nav-group">录制模式</div>
+    <div class="nav-item" data-page="page-create"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>新建录制</div>
+    <div class="nav-item" data-page="page-ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 4.8L18.7 9.7l-4.8 1.9L12 16.4l-1.9-4.8L5.3 9.7l4.8-1.9z"/></svg>AI 录制<span class="nav-badge">live</span></div>
+    <div class="nav-item" data-page="page-browser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>浏览器录制</div>
+    <div class="nav-group">执行与调试</div>
+    <div class="nav-item" data-page="page-exec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16M4 12h16M4 19h10"/></svg>执行监控</div>
+    <div class="nav-item" data-page="page-debug"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v8M8 12h8M3 7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/></svg>交互调试</div>
+    <div class="nav-item" data-page="page-report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>报告详情</div>
+    <div class="side-bottom nav-item"><span class="status-dot"></span> Runner · :9377<span style="color:var(--text3);font-size:11px;margin-left:auto" class="mono">online</span></div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">AutoTest <span>/</span> <b id="crumb">测试任务</b></div>
+      <div class="theme-switch" title="切换主题">
+        <span class="ts-dark" data-theme-val="dark">深</span>
+        <span class="ts-light" data-theme-val="light">浅</span>
+        <span class="ts-vivid" data-theme-val="vivid">彩</span>
+      </div>
+      <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg><input id="global-search" placeholder="搜索任务 / 项目 / 报告…（回车跳转）" onkeydown="if(event.key==='Enter')globalSearch()"></div>
+      <div class="avatar">PM</div>
+    </div>
+
+    <div class="content">
+
+      <!-- ===== 任务看板 / 列表 ===== -->
+            <!-- ===== 测试任务工作台（细化） ===== -->
+      <section class="page active" id="page-dashboard">
+        <div class="page-title">任务工作台 <span class="tag cyan mono">串行队列</span>
+          <span style="margin-left:auto;font-size:12px;color:var(--text3)" class="mono">队列 2 个等待 · 串行槽位 1/1</span></div>
+        <div class="page-sub">单机串行执行 · 同一时间仅运行一个任务，其余自动排队</div>
+        <div class="stats">
+          <div class="stat"><div class="lbl">总任务</div><div class="num">24</div><div class="delta up">▲ 12.4% 较上周</div></div>
+          <div class="stat"><div class="lbl">待执行</div><div class="num">12</div><div class="delta flat">队列空闲</div></div>
+          <div class="stat"><div class="lbl">执行中</div><div class="num">3</div><div class="delta flat">1 个串行槽位</div></div>
+          <div class="stat"><div class="lbl">今日通过率</div><div class="num">89<span style="font-size:16px">%</span></div><div class="delta up">▲ 3.2%</div></div>
+        </div>
+        <div class="toolbar">
+          <div class="tb-search"><span style="opacity:.6">🔍</span><input id="task-search" placeholder="搜索任务 / 项目…"></div>
+          <div class="fc-group" id="task-filters">
+            <span class="filter-chip on" data-f="all">全部<span class="cnt">24</span></span>
+            <span class="filter-chip" data-f="pending">待执行<span class="cnt">12</span></span>
+            <span class="filter-chip" data-f="running">执行中<span class="cnt">3</span></span>
+            <span class="filter-chip" data-f="done">已完成<span class="cnt">18</span></span>
+            <span class="filter-chip" data-f="failed">失败<span class="cnt">5</span></span>
+          </div>
+          <span style="flex:1"></span>
+          <div class="seg" id="view-seg"><span class="on" data-view="kanban">看板</span><span data-view="list">列表</span></div>
+          <button class="btn primary" onclick="go('page-task-create')">+ 新建任务</button>
+          <button class="btn ghost" onclick="toast('已将选中任务加入批量执行队列','2 个')">批量执行</button>
+        </div>
+
+        <div class="board" id="board">
+          <div class="col amber" data-col="pending">
+            <div class="col-head"><span class="col-dot"></span><b>待执行</b><span class="col-count">12</span></div>
+            <div class="taskcard" draggable="true" data-name="注册流程" data-browser="Chromium 120" onclick="openTask(this)"><div class="tc-top"><span class="tag ai">AI</span><span class="tc-name">注册流程</span></div><div class="tc-meta">Chromium 120 · 预计 2m</div></div>
+            <div class="taskcard" draggable="true" data-name="订单查询" data-browser="WebKit 17" onclick="openTask(this)"><div class="tc-top"><span class="tag browser">浏览器</span><span class="tc-name">订单查询</span></div><div class="tc-meta">WebKit 17 · 预计 5m</div></div>
+            <div class="taskcard" draggable="true" data-name="支付测试" data-browser="Firefox 115" onclick="openTask(this)"><div class="tc-top"><span class="tag ai">AI</span><span class="tc-name">支付测试</span></div><div class="tc-meta">Firefox 115 · 预计 8m</div></div>
+          </div>
+          <div class="col cyan" data-col="running">
+            <div class="col-head"><span class="col-dot"></span><b>执行中</b><span class="col-count">3</span></div>
+            <div class="taskcard" data-name="登录测试" data-browser="Chromium 120" onclick="openTask(this)"><div class="tc-top"><span class="tag browser">浏览器</span><span class="tc-name">登录测试</span><span style="margin-left:auto;color:var(--primary);font-size:11px" class="mono">45%</span></div><div class="tc-meta">Chromium 120 · RUNNING</div></div>
+            <div class="taskcard" data-name="商品搜索" data-browser="Chromium" onclick="openTask(this)"><div class="tc-top"><span class="tag ai">AI</span><span class="tc-name">商品搜索</span><span style="margin-left:auto;color:var(--primary);font-size:11px" class="mono">70%</span></div><div class="tc-meta">Chromium · RUNNING</div></div>
+          </div>
+          <div class="col green" data-col="done">
+            <div class="col-head"><span class="col-dot"></span><b>已完成</b><span class="col-count">18</span></div>
+            <div class="taskcard" data-name="购物车流程" data-browser="Firefox 115" onclick="openTask(this)"><div class="tc-top"><span class="tag ai">AI</span><span class="tc-name">购物车流程</span><span style="margin-left:auto;color:var(--success);font-size:12px">✓</span></div><div class="tc-meta">Firefox 115 · 100%</div></div>
+            <div class="taskcard" data-name="用户管理" data-browser="Chromium 120" onclick="openTask(this)"><div class="tc-top"><span class="tag browser">浏览器</span><span class="tc-name">用户管理</span><span style="margin-left:auto;color:var(--success);font-size:12px">✓</span></div><div class="tc-meta">Chromium 120 · 100%</div></div>
+            <div class="taskcard" data-name="登录测试" data-browser="Chromium" onclick="openTask(this)"><div class="tc-top"><span class="tag ai">AI</span><span class="tc-name">登录测试</span><span style="margin-left:auto;color:var(--success);font-size:12px">✓</span></div><div class="tc-meta">Chromium · 100%</div></div>
+          </div>
+          <div class="col red" data-col="failed">
+            <div class="col-head"><span class="col-dot"></span><b>失败</b><span class="col-count">5</span></div>
+            <div class="taskcard" data-name="支付测试" data-browser="Edge 118" onclick="openTask(this)"><div class="tc-top"><span class="tag ai">AI</span><span class="tc-name">支付测试</span><span style="margin-left:auto;color:var(--danger);font-size:12px">✕</span></div><div class="tc-meta">Edge 118 · 3/3 重试</div></div>
+            <div class="taskcard" data-name="API 网关" data-browser="Chromium" onclick="openTask(this)"><div class="tc-top"><span class="tag browser">浏览器</span><span class="tc-name">API 网关</span><span style="margin-left:auto;color:var(--danger);font-size:12px">✕</span></div><div class="tc-meta">Chromium · 超时</div></div>
+          </div>
+        </div>
+
+        <div class="tasktable" id="tasktable">
+          <div class="list-tools" style="padding:12px 14px 0">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="check-all" style="accent-color:var(--primary)"> 全选</label>
+            <span style="color:var(--text3)">已选 <b id="sel-count">0</b> 项</span>
+            <span class="grow"></span>
+            <button class="btn" style="padding:5px 10px;font-size:12px" onclick="toast('已批量执行所选任务','3 个')">▶ 批量执行</button>
+            <button class="btn" style="padding:5px 10px;font-size:12px" onclick="toast('已批量删除所选任务','3 个')">🗑 删除</button>
+          </div>
+          <table>
+            <thead><tr><th style="width:30px"></th><th class="sortable" data-k="name">任务名称 <span class="sort-arrow">↕</span></th><th class="sortable" data-k="proj">项目 <span class="sort-arrow">↕</span></th><th>状态</th><th>浏览器</th><th>重试</th><th>操作</th></tr></thead>
+            <tbody id="task-tbody">
+              <tr data-row="登录测试"><td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td><td onclick="openTaskRow('登录测试')" style="cursor:pointer;color:var(--text)"><b>登录测试</b></td><td>登录项目</td><td><span class="tag cyan">执行中</span></td><td class="mono">Chromium 120</td><td class="mono">0/3</td><td><span class="row-edit" title="编辑任务" onclick="editTaskRow(this)">✏️</span> <span class="row-act" title="执行" onclick="toast('任务已加入执行队列')">▶</span> <span class="row-act" title="查看报告" onclick="go('page-report')">📄</span></td></tr>
+              <tr data-row="购物车流程"><td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td><td onclick="openTaskRow('购物车流程')" style="cursor:pointer;color:var(--text)"><b>购物车流程</b></td><td>商城项目</td><td><span class="tag green">成功</span></td><td class="mono">Firefox 115</td><td class="mono">0/3</td><td><span class="row-edit" title="编辑任务" onclick="editTaskRow(this)">✏️</span> <span class="row-act" title="查看报告" onclick="go('page-report')">📄</span></td></tr>
+              <tr data-row="支付测试"><td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td><td onclick="openTaskRow('支付测试')" style="cursor:pointer;color:var(--text)"><b>支付测试</b></td><td>支付项目</td><td><span class="tag red">失败</span></td><td class="mono">Edge 118</td><td class="mono">3/3</td><td><span class="row-edit" title="编辑任务" onclick="editTaskRow(this)">✏️</span> <span class="row-act" title="执行" onclick="toast('任务已加入执行队列')">▶</span> <span class="row-act" title="查看报告" onclick="go('page-report')">📄</span></td></tr>
+              <tr data-row="注册流程"><td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td><td onclick="openTaskRow('注册流程')" style="cursor:pointer;color:var(--text)"><b>注册流程</b></td><td>注册项目</td><td><span class="tag amber">重试中</span></td><td class="mono">Chromium</td><td class="mono">2/3</td><td><span class="row-edit" title="编辑任务" onclick="editTaskRow(this)">✏️</span> <span class="row-act" title="查看报告" onclick="go('page-report')">📄</span></td></tr>
+              <tr data-row="订单查询"><td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td><td onclick="openTaskRow('订单查询')" style="cursor:pointer;color:var(--text)"><b>订单查询</b></td><td>订单项目</td><td><span class="tag gray">待执行</span></td><td class="mono">WebKit 17</td><td class="mono">0/3</td><td><span class="row-edit" title="编辑任务" onclick="editTaskRow(this)">✏️</span> <span class="row-act" title="执行" onclick="toast('任务已加入执行队列')">▶</span> <span class="row-act" title="查看报告" onclick="go('page-report')">📄</span></td></tr>
+            </tbody>
+          </table>
+          <div class="pager">
+            <button class="pg" disabled>«</button><button class="pg on">1</button><button class="pg">2</button><button class="pg">3</button><button class="pg">»</button>
+            <span style="font-size:11px;color:var(--text3);margin-left:8px" class="mono">共 24 条</span>
+          </div>
+        </div>
+        <p style="color:var(--text3);font-size:11px;margin-top:14px" class="mono">提示：拖拽卡片可在列之间移动更新任务状态 · 点击卡片 / 行查看任务详情（原型演示）</p>
+      </section>
+
+      <!-- ===== 任务详情抽屉 ===== -->
+      <div class="drawer-mask" id="task-mask" onclick="closeTask()"></div>
+      <aside class="drawer" id="task-drawer">
+        <div class="drawer-head"><span class="tag cyan">测试任务</span><h3 id="task-d-title">登录测试</h3><span class="drawer-x" onclick="closeTask()">&times;</span></div>
+        <div class="drawer-body">
+          <div class="drawer-sec">基本信息</div>
+          <div class="detail-item"><span class="k">任务 ID</span><span class="v" id="task-d-id">tsk_20260829_001</span></div>
+          <div class="detail-item"><span class="k">所属项目</span><span class="v">登录项目</span></div>
+          <div class="detail-item"><span class="k">状态</span><span class="v"><span class="tag cyan">执行中</span></span></div>
+          <div class="detail-item"><span class="k">浏览器</span><span class="v" id="task-d-browser">Chromium 120</span></div>
+          <div class="detail-item"><span class="k">重试</span><span class="v">0 / 3</span></div>
+          <div class="detail-item"><span class="k">创建时间</span><span class="v">2026-08-29 14:20</span></div>
+          <div class="detail-item"><span class="k">耗时</span><span class="v">12.3s</span></div>
+          <div class="drawer-sec">执行参数</div>
+          <div class="detail-item"><span class="k">base_url</span><span class="v">https://demo.test.com</span></div>
+          <div class="detail-item"><span class="k">username</span><span class="v">admin</span></div>
+          <div class="detail-item"><span class="k">password</span><span class="v">••••••</span></div>
+          <div class="drawer-sec">执行历史（点击回放 · 与监控页一致）</div>
+          <div class="hist-list">
+            <div class="hist-item" onclick="openReplay('第 3 次迭代')"><span class="mono">第 3 次</span><span class="tag cyan">执行中</span><span class="p-mini">14:30:25 · 12.3s</span><span class="go">回放 →</span></div>
+            <div class="hist-item" onclick="openReplay('第 2 次迭代')"><span class="mono">第 2 次</span><span class="tag green">通过</span><span class="p-mini">14:28:10 · 11.8s</span><span class="go">回放 →</span></div>
+            <div class="hist-item" onclick="openReplay('第 1 次迭代')"><span class="mono">第 1 次</span><span class="tag green">通过</span><span class="p-mini">14:26:02 · 12.1s</span><span class="go">回放 →</span></div>
+          </div>
+          <div class="drawer-sec">报告</div>
+          <div class="detail-item"><span class="k">report_20260829_001</span><span class="v" style="color:var(--success);cursor:pointer" onclick="closeTask();go('page-report')">查看 →</span></div>
+        </div>
+        <div class="drawer-foot"><button class="btn" onclick="editTaskRow(null)">✏️ 编辑任务</button><button class="btn danger" onclick="toast('已停止执行','任务已终止')">停止执行</button><button class="btn primary" onclick="closeTask();go('page-report')">查看报告</button></div>
+      </aside>
+
+      <!-- ===== 历史回放抽屉（与执行监控页同构） ===== -->
+      <div class="drawer-mask" id="replay-mask" onclick="closeReplay()"></div>
+      <aside class="drawer wide" id="replay-drawer">
+        <div class="drawer-head"><span class="tag cyan">历史回放</span><h3 id="replay-title">第 2 次迭代 · 回放</h3><span class="drawer-x" onclick="closeReplay()">&times;</span></div>
+        <div class="drawer-body">
+          <div class="detail-item"><span class="k">开始时间</span><span class="v">2026-08-29 14:28:10</span></div>
+          <div class="detail-item"><span class="k">调度类型</span><span class="v">按次数循环 · 迭代 2/20</span></div>
+          <div class="detail-item"><span class="k">结果</span><span class="v" style="color:var(--success)">通过</span></div>
+          <div class="detail-item"><span class="k">耗时</span><span class="v">11.8s</span></div>
+          <div class="drawer-sec">执行进度（与实时监控一致）</div>
+          <div class="bar"><i style="width:100%;background:var(--success)"></i></div>
+          <div class="drawer-sec">日志流</div>
+          <div class="log">
+            <div><span class="t">14:28:10</span> <span class="info">[INFO] 开始第 2 次迭代</span></div>
+            <div><span class="t">14:28:11</span> <span class="info">[INFO] 正在打开页面 https://demo.test.com/login</span></div>
+            <div><span class="t">14:28:13</span> <span class="info">[INFO] 输入用户名 admin</span></div>
+            <div><span class="t">14:28:14</span> <span class="info">[INFO] 输入密码 ••••••</span></div>
+            <div><span class="t">14:28:16</span> <span class="info">[INFO] 点击登录按钮</span></div>
+            <div><span class="t">14:28:19</span> <span class="ok">[SUCCESS] 登录成功，跳转 /dashboard</span></div>
+            <div><span class="t">14:28:20</span> <span class="ok">[SUCCESS] 第 2 次迭代通过</span></div>
+          </div>
+          <div class="drawer-sec">截图（与实时监控一致）</div>
+          <div class="shots">
+            <div class="shot"><span class="cap">登录页</span></div>
+            <div class="shot"><span class="cap">输入凭据</span></div>
+            <div class="shot"><span class="cap">登录成功</span></div>
+            <div class="shot"><span class="cap">迭代完成</span></div>
+          </div>
+        </div>
+        <div class="drawer-foot"><button class="btn ghost" onclick="closeReplay()">关闭</button><button class="btn primary" onclick="closeReplay();go('page-report')">查看完整报告</button></div>
+      </aside>
+
+
+
+      <!-- ===== 创建测试任务（3 步分步表单） ===== -->
+            <section class="page" id="page-task-create">
+        <div class="page-title">创建测试任务 <span class="mono" style="color:var(--text3);font-size:13px">分步向导</span>
+          <span style="margin-left:auto" class="h-row"><button class="btn ghost" onclick="go('page-dashboard')">← 返回任务列表</button></span></div>
+        <div class="page-sub">基本信息 → 脚本与资源 → 执行调度 → 确认创建</div>
+        <div class="wizard">
+          <div class="w-step on" data-ws="1"><span class="w-no">1</span>基本信息</div>
+          <div class="w-line"></div>
+          <div class="w-step" data-ws="2"><span class="w-no">2</span>脚本与资源</div>
+          <div class="w-line"></div>
+          <div class="w-step" data-ws="3"><span class="w-no">3</span>执行调度</div>
+          <div class="w-line"></div>
+          <div class="w-step" data-ws="4"><span class="w-no">4</span>确认创建</div>
+        </div>
+        <!-- Step 1 基本信息 -->
+        <div class="w-panel on" id="wp-1">
+          <div class="create-form" style="max-width:760px;margin:0 auto">
+            <div class="field"><label>任务名称 <i>*</i></label><input id="task-name" placeholder="例如：登录测试（10 分钟压测）"></div>
+            <div class="field"><label>任务描述</label><textarea id="task-desc" placeholder="例如：登录系统并验证跳转，按次数循环 20 次回归"></textarea></div>
+            <div class="h-row" style="justify-content:flex-end;margin-top:6px"><button class="btn primary" onclick="wizNext()">下一步：脚本与资源 →</button></div>
+          </div>
+        </div>
+        <!-- Step 2 脚本与资源 -->
+        <div class="w-panel" id="wp-2">
+          <div class="create-form" style="max-width:760px;margin:0 auto">
+            <div class="field"><label>脚本来源 <i>*</i></label>
+              <div class="seg" style="width:100%;justify-content:space-between">
+                <span class="on" id="src-upload" style="flex:1;text-align:center" onclick="setScriptSrc('upload')">上传脚本文件</span>
+                <span id="src-project" style="flex:1;text-align:center" onclick="setScriptSrc('project')">从录制项目选择</span>
+              </div>
+            </div>
+            <div id="sc-upload">
+              <div class="field"><label>脚本文件 <i>*</i></label>
+                <div class="dropzone" id="drop-script" onclick="toast('已选择脚本文件','login.test.js')">
+                  <div class="dz-ico">📄</div>
+                  <div class="dz-t">拖拽脚本到此处，或点击选择</div>
+                  <div class="dz-s">支持 Playwright JavaScript / Python</div>
+                </div>
+                <div class="file-chip"><span>📄 login.test.js</span><span class="mono" style="color:var(--text3)">12.4 KB</span><span class="tag ai">JavaScript</span><span class="fx" onclick="toast('已移除脚本文件')">✕</span></div>
+              </div>
+              <div class="field"><label>测试资源文件（可多个 · 批量上传 · 支持所有类型）</label>
+                <div class="dropzone" id="drop-res" onclick="toast('已批量选择资源文件','3 个')">
+                  <div class="dz-ico">🗂</div>
+                  <div class="dz-t">拖拽资源文件到此处，或点击批量选择</div>
+                  <div class="dz-s">CSV / JSON / 图片 / Excel / ZIP … 所有类型，脚本运行时可按路径引用</div>
+                </div>
+                <div class="res-list">
+                  <div class="file-chip"><span>users.csv</span><span class="mono" style="color:var(--text3)">2.1 KB</span><span class="tag browser">CSV</span><span class="fx" onclick="toast('已移除资源文件')">✕</span></div>
+                  <div class="file-chip"><span>config.json</span><span class="mono" style="color:var(--text3)">1.3 KB</span><span class="tag browser">JSON</span><span class="fx" onclick="toast('已移除资源文件')">✕</span></div>
+                  <div class="file-chip"><span>logo.png</span><span class="mono" style="color:var(--text3)">86 KB</span><span class="tag ai">PNG</span><span class="fx" onclick="toast('已移除资源文件')">✕</span></div>
+                </div>
+              </div>
+            </div>
+            <div id="sc-project" style="display:none">
+              <div class="field"><label>选择录制项目 <i>*</i></label>
+                <select><option>登录项目（登录测试 · 浏览器录制）</option><option>商城项目（购物车流程 · AI 录制）</option><option>支付项目（支付测试 · AI 录制）</option></select>
+              </div>
+              <div class="detail-item"><span class="k">项目脚本</span><span class="v">scriptContent · 12 步</span></div>
+              <div class="detail-item"><span class="k">创建时间</span><span class="v">2026-08-28</span></div>
+            </div>
+            <div class="h-row" style="justify-content:space-between;margin-top:6px"><button class="btn ghost" onclick="wizPrev()">← 上一步</button><button class="btn primary" onclick="wizNext()">下一步：执行调度 →</button></div>
+          </div>
+        </div>
+        <!-- Step 3 执行调度 -->
+        <div class="w-panel" id="wp-3">
+          <div class="create-form" style="max-width:760px;margin:0 auto">
+            <div class="field"><label>执行方式 <i>*</i></label>
+              <div class="type-seg sch">
+                <div class="type-card on" id="sch-manual" onclick="setSchedule('manual')"><div class="t-ico">▶</div><div class="t-name">手动执行</div><div class="t-desc">点击执行时运行一次，快速验证</div></div>
+                <div class="type-card" id="sch-time" onclick="setSchedule('time')"><div class="t-ico">⏱</div><div class="t-name">按时间循环</div><div class="t-desc">在持续时长内循环执行脚本</div></div>
+                <div class="type-card" id="sch-count" onclick="setSchedule('count')"><div class="t-ico">🔁</div><div class="t-name">按次数循环</div><div class="t-desc">循环执行指定迭代次数</div></div>
+              </div>
+            </div>
+            <div class="field" id="f-sch-time" style="display:none"><label>持续时长 <i>*</i></label>
+              <div class="f-row">
+                <div class="field" style="flex:1;margin-bottom:0"><input id="dur-val" type="number" min="1" value="10" class="mono"></div>
+                <div class="field" style="flex:0 0 130px;margin-bottom:0"><select id="dur-unit"><option>分钟</option><option>小时</option><option>天</option><option>秒</option></select></div>
+              </div>
+              <div class="p-mini" style="margin-top:8px">到达时长自动停止 · 期间失败不中断，每次迭代独立记录历史</div>
+            </div>
+            <div class="field" id="f-sch-count" style="display:none"><label>迭代次数 <i>*</i></label>
+              <input id="count-val" type="number" min="1" value="20" class="mono" style="max-width:200px">
+              <div class="p-mini" style="margin-top:8px">跑满 N 次自动结束 · 单次失败继续下一次，每次迭代独立记录历史</div>
+            </div>
+            <div class="h-row" style="justify-content:space-between;margin-top:6px"><button class="btn ghost" onclick="wizPrev()">← 上一步</button><button class="btn primary" onclick="wizNext()">下一步：确认创建 →</button></div>
+          </div>
+        </div>
+        <!-- Step 4 确认创建 -->
+        <div class="w-panel" id="wp-4">
+          <div class="create-form" style="max-width:760px;margin:0 auto">
+            <div class="drawer-sec">任务摘要</div>
+            <div class="detail-item"><span class="k">任务名称</span><span class="v" id="sum-name">登录测试（10 分钟压测）</span></div>
+            <div class="detail-item"><span class="k">任务描述</span><span class="v" id="sum-desc">登录系统并验证跳转，按次数循环 20 次回归</span></div>
+            <div class="detail-item"><span class="k">脚本来源</span><span class="v" id="sum-src">上传 login.test.js</span></div>
+            <div class="detail-item"><span class="k">资源文件</span><span class="v">users.csv · config.json · logo.png（3 个）</span></div>
+            <div class="detail-item"><span class="k">执行方式</span><span class="v" id="sum-sch">按时间循环 · 10 分钟</span></div>
+            <div class="drawer-sec">脚本预览</div>
+            <div class="code-pre"><span class="cm">// login.test.js</span>
+<span class="kw">const</span> { chromium } = <span class="kw">require</span>(<span class="st">'playwright'</span>);
+(<span class="kw">async</span> () =&gt; {
+  <span class="kw">const</span> browser = <span class="kw">await</span> chromium.launch();
+  <span class="kw">const</span> page = <span class="kw">await</span> browser.newPage();
+  <span class="kw">await</span> page.goto(<span class="st">'https://demo.test.com/login'</span>);
+  <span class="kw">await</span> page.fill(<span class="st">'#username'</span>, <span class="st">'admin'</span>);
+  <span class="kw">await</span> page.fill(<span class="st">'#password'</span>, <span class="st">'admin123'</span>);
+  <span class="kw">await</span> page.click(<span class="st">'.login-btn'</span>);
+  <span class="cm">// ... 后续步骤 ...</span>
+})();</div>
+            <div class="h-row" style="justify-content:space-between;margin-top:18px"><button class="btn ghost" onclick="wizPrev()">← 上一步</button>
+              <span class="h-row"><button class="btn" onclick="toast('任务已保存','未执行')">保存</button><button class="btn primary" onclick="go('page-exec');toast('任务已保存并开始执行','第 1 / 20 次迭代')">保存并立即执行</button></span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 新建录制（创建分流） ===== -->
+      <section class="page" id="page-create">
+        <div class="page-title">创建录制项目</div>
+        <div class="page-sub">选择录制类型，AI 录制与浏览器录制统一管理</div>
+        <div class="create-wrap">
+          <div class="create-form">
+            <div class="field"><label>项目名称 <i>*</i></label><input placeholder="例如：登录测试"></div>
+            <div class="field"><label>录制类型 <i>*</i></label>
+              <div class="type-seg">
+                <div class="type-card on" id="tc-ai"><div class="t-ico">✦</div><div class="t-name">AI 录制</div><div class="t-desc">自然语言描述任务，AI 自主探索生成脚本</div></div>
+                <div class="type-card" id="tc-browser"><div class="t-ico">🌐</div><div class="t-name">浏览器录制</div><div class="t-desc">手动操作，系统精确捕获并生成步骤</div></div>
+              </div>
+            </div>
+            <div class="field" id="f-ai"><label>目标 URL <i>*</i></label><input placeholder="https://example.com/login" class="mono"></div>
+            <div class="field" id="f-ai-desc"><label>任务描述（自然语言） <i>*</i></label><textarea placeholder="例如：登录系统，进入订单管理，创建一笔测试订单并验证成功提示"></textarea>
+              <div class="h-row" style="margin-top:12px;justify-content:flex-end"><button class="btn primary">✦ 生成脚本</button></div></div>
+            <div class="field" id="f-browser" style="display:none"><label>定位策略</label>
+              <div class="seg" style="width:100%;justify-content:space-between"><span class="on">default</span><span>tolerant</span><span>robust</span><span>semantic</span></div>
+              <div class="h-row" style="margin-top:14px;justify-content:space-between"><span style="color:var(--text3);font-size:12px">最大时长 <b class="mono">600</b> s</span><button class="btn primary">▶ 启动录制</button></div></div>
+          </div>
+        </div>
+      </section>
+
+            <!-- ===== AI 录制（真实实现 index.html，直接嵌入） ===== -->
+      <section class="page" id="page-ai">
+        <div class="page-title"><span class="tag cyan">AI 录制</span> 真实界面 <span class="mono" style="color:var(--text3);font-size:13px">index.html · SmartBrowser Agent 观测台</span>
+          <span style="margin-left:auto;font-size:12px;color:var(--text3)">需先运行 start_preview.bat</span></div>
+        <div class="page-sub">三栏布局：左侧会话列表 · 中部对话输入（起始 URL + 自然语言任务）· 右侧执行观测（时间线 / 工作台 / 代码三模式 + F12 式调试器）。下方为真实页面实时嵌入。</div>
+        <div class="embed-frame"><iframe src="http://127.0.0.1:8123/index.html" loading="lazy" title="AI 录制真实界面 index.html"></iframe></div>
+      </section>
+
+
+            <!-- ===== 浏览器录制（真实实现 inspect.html，直接嵌入） ===== -->
+      <section class="page" id="page-browser">
+        <div class="page-title"><span class="tag red"><span class="status-dot" style="width:6px;height:6px"></span>浏览器录制</span> 真实界面 <span class="mono" style="color:var(--text3);font-size:13px">inspect.html · Playwright 渐进式调试器</span>
+          <span style="margin-left:auto;font-size:12px;color:var(--text3)">需先运行 start_preview.bat</span></div>
+        <div class="page-sub">顶栏 URL + 打开 + 导航 · 实时预览（hover 查看 / 点击选中 / 直接拖动 = 真实拖拽）· 右侧「检视 / 时间线 / 代码」三 Tab。下方为真实页面实时嵌入。</div>
+        <div class="embed-frame"><iframe src="http://127.0.0.1:8123/inspect.html" loading="lazy" title="浏览器录制真实界面 inspect.html"></iframe></div>
+      </section>
+
+
+      <!-- ===== 执行监控 ===== -->
+            <section class="page" id="page-exec">
+        <div class="page-title">执行监控 <span class="mono" style="color:var(--text3);font-size:13px">task_20260829_001</span>
+          <span class="tag cyan" style="margin-left:6px">迭代 <b>3</b> / 20</span>
+          <span style="margin-left:auto" class="h-row"><button class="btn danger" onclick="confirmStop()">停止执行</button><button class="btn" onclick="go('page-report')">查看报告</button></span></div>
+        <div class="page-sub">登录测试 · 按次数循环 · 实时执行状态</div>
+        <div class="exe-top">
+          <div class="h-row" style="margin-bottom:12px"><span class="tag cyan"><span class="status-dot" style="width:6px;height:6px"></span>执行中</span>
+            <span style="font-size:12px;color:var(--text3)" class="mono">迭代 3/20 · 已完成 2 次 · elapsed 12.3s · queue 1/1</span></div>
+          <div class="bar" style="margin-bottom:16px"><i style="width:15%"></i></div>
+          <div class="exe-grid">
+            <div class="exe-item"><div class="lbl">状态</div><div class="val" style="color:var(--primary)">RUNNING</div></div>
+            <div class="exe-item"><div class="lbl">调度</div><div class="val">按次数 · 20 次</div></div>
+            <div class="exe-item"><div class="lbl">当前迭代</div><div class="val">第 3 次</div></div>
+            <div class="exe-item"><div class="lbl">开始时间</div><div class="val">14:30:25</div></div>
+          </div>
+        </div>
+        <div class="exe-main">
+          <div class="card"><h4 style="font-size:13px;margin-bottom:10px;color:var(--text2)">实时日志 <span style="float:right;font-weight:400" class="p-mini">迭代分隔自动标注</span></h4>
+            <div class="log" id="log">
+              <div><span class="t">14:30:25</span> <span style="color:var(--violet)">════ 第 3 次迭代开始 ════</span></div>
+              <div><span class="t">14:30:25</span> <span class="info">[INFO] 开始执行测试任务（迭代 3/20）</span></div>
+              <div><span class="t">14:30:26</span> <span class="info">[INFO] 正在打开页面 https://demo.test.com/login</span></div>
+              <div><span class="t">14:30:28</span> <span class="info">[INFO] 输入用户名 admin</span></div>
+              <div><span class="t">14:30:29</span> <span class="info">[INFO] 输入密码 ••••••</span></div>
+              <div><span class="t">14:30:32</span> <span class="info">[INFO] 点击登录按钮</span></div>
+              <div><span class="t">14:30:35</span> <span class="ok">[SUCCESS] 登录成功，跳转 /dashboard</span></div>
+              <div><span class="t">14:30:36</span> <span class="info">[INFO] 验证元素 [欢迎语]</span></div>
+              <div><span class="t">14:30:37</span> <span class="ok">[SUCCESS] 第 3 次迭代通过</span></div>
+            </div></div>
+          <div class="card"><h4 style="font-size:13px;margin-bottom:10px;color:var(--text2)">本次迭代截图</h4>
+            <div class="shots">
+              <div class="shot"><span class="cap">登录页</span></div>
+              <div class="shot"><span class="cap">输入凭据</span></div>
+              <div class="shot"><span class="cap">登录成功</span></div>
+              <div class="shot"><span class="cap">迭代完成</span></div>
+            </div>
+            <div class="hist-list" style="margin-top:14px">
+              <div class="drawer-sec" style="margin:4px 0 8px">历史迭代（点击回放）</div>
+              <div class="hist-item" onclick="openReplay('第 2 次迭代')"><span class="mono">第 2 次</span><span class="tag green">通过</span><span class="p-mini">11.8s</span><span class="go">回放 →</span></div>
+              <div class="hist-item" onclick="openReplay('第 1 次迭代')"><span class="mono">第 1 次</span><span class="tag green">通过</span><span class="p-mini">12.1s</span><span class="go">回放 →</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+            <!-- ===== 测试计划（细化） ===== -->
+      <section class="page" id="page-plans">
+        <div class="page-title">测试计划管理
+          <span style="margin-left:auto" class="h-row"><button class="btn primary" onclick="openPlanModal()">+ 新建计划</button></span></div>
+        <div class="page-sub">串行执行 · 单任务失败后续任务继续执行 · 支持 Cron 定时触发</div>
+        <div class="toolbar">
+          <div class="tb-search"><span style="opacity:.6">🔍</span><input id="plan-search" placeholder="搜索计划名称…"></div>
+          <div class="fc-group" id="plan-filters">
+            <span class="filter-chip on" data-f="all">全部<span class="cnt">4</span></span>
+            <span class="filter-chip" data-f="running">运行中<span class="cnt">1</span></span>
+            <span class="filter-chip" data-f="done">已完成<span class="cnt">1</span></span>
+            <span class="filter-chip" data-f="idle">闲置<span class="cnt">1</span></span>
+            <span class="filter-chip" data-f="failed">失败<span class="cnt">1</span></span>
+          </div>
+        </div>
+        <div class="plan-grid" id="plan-grid">
+          <div class="plan" data-name="每日回归" data-f="running" onclick="openPlan(this)">
+            <div class="p-top"><span class="tag cyan">运行中</span><b class="p-name">每日回归</b><span class="p-cron">0 2 * * *</span></div>
+            <div class="p-desc">每日凌晨全量回归 · 5 个核心链路</div>
+            <div class="bar p-progress"><i style="width:60%"></i></div>
+            <div class="p-meta"><span>3 / 5 已完成</span><span>最近 02:00 · 08-29</span></div>
+            <div class="p-tasks"><span class="pt-chip">登录测试</span><span class="pt-chip">注册流程</span><span class="pt-chip">订单查询</span><span class="pt-chip">支付测试</span><span class="pt-chip">购物车</span></div>
+            <div class="p-actions"><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();toast('已暂停计划「每日回归」')">⏸ 暂停</button><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();toast('已复制计划「每日回归」')">⧉ 复制</button><button class="btn danger" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();confirmDelPlan('每日回归')">🗑</button></div>
+          </div>
+          <div class="plan" data-name="冒烟测试" data-f="done" onclick="openPlan(this)">
+            <div class="p-top"><span class="tag green">已完成</span><b class="p-name">冒烟测试</b><span class="p-cron">-</span></div>
+            <div class="p-desc">发布前冒烟 · 3 个关键流程</div>
+            <div class="bar p-progress"><i style="width:100%;background:var(--success)"></i></div>
+            <div class="p-meta"><span>3 / 3 已完成</span><span>最近 08-28 10:00</span></div>
+            <div class="p-tasks"><span class="pt-chip">登录测试</span><span class="pt-chip">用户管理</span><span class="pt-chip">API 网关</span></div>
+            <div class="p-actions"><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();toast('已触发「冒烟测试」立即执行')">▶ 立即执行</button><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();toast('已复制计划「冒烟测试」')">⧉ 复制</button><button class="btn danger" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();confirmDelPlan('冒烟测试')">🗑</button></div>
+          </div>
+          <div class="plan" data-name="核心流程回归" data-f="idle" onclick="openPlan(this)">
+            <div class="p-top"><span class="tag gray">闲置</span><b class="p-name">核心流程回归</b><span class="p-cron">0 9 * * 1-5</span></div>
+            <div class="p-desc">工作日早间核心回归 · 8 条链路</div>
+            <div class="bar p-progress"><i style="width:0%"></i></div>
+            <div class="p-meta"><span>0 / 8 已完成</span><span>下次 明日 09:00</span></div>
+            <div class="p-tasks"><span class="pt-chip">登录测试</span><span class="pt-chip">注册流程</span><span class="pt-chip">订单查询</span><span class="pt-chip">支付测试</span><span class="pt-chip">购物车</span><span class="pt-chip">用户管理</span><span class="pt-chip">API 网关</span><span class="pt-chip">商品搜索</span></div>
+            <div class="p-actions"><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();toast('已触发「核心流程回归」立即执行')">▶ 立即执行</button><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();editPlan('核心流程回归')">✏️</button><button class="btn danger" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();confirmDelPlan('核心流程回归')">🗑</button></div>
+          </div>
+          <div class="plan" data-name="支付链路验证" data-f="failed" onclick="openPlan(this)">
+            <div class="p-top"><span class="tag red">失败</span><b class="p-name">支付链路验证</b><span class="p-cron">-</span></div>
+            <div class="p-desc">支付全链路验证 · 2 条链路</div>
+            <div class="bar p-progress"><i style="width:50%;background:var(--danger)"></i></div>
+            <div class="p-meta"><span>1 / 2 已完成</span><span>最近 08-26 18:00</span></div>
+            <div class="p-tasks"><span class="pt-chip">支付测试</span><span class="pt-chip">退款流程</span></div>
+            <div class="p-actions"><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();toast('已重新触发「支付链路验证」')">▶ 重试</button><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();editPlan('支付链路验证')">✏️</button><button class="btn danger" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();confirmDelPlan('支付链路验证')">🗑</button></div>
+          </div>
+        </div>
+        <p style="color:var(--text3);font-size:11px;margin-top:14px" class="mono">提示：点击计划卡片查看详情 · 计划内任务支持拖拽排序（原型演示）</p>
+      </section>
+
+      <!-- ===== 计划详情抽屉 ===== -->
+      <div class="drawer-mask" id="plan-mask" onclick="closePlan()"></div>
+      <aside class="drawer" id="plan-drawer">
+        <div class="drawer-head"><span class="tag cyan">测试计划</span><h3 id="plan-d-title">每日回归</h3><span class="drawer-x" onclick="closePlan()">&times;</span></div>
+        <div class="drawer-body">
+          <div class="drawer-sec">计划信息</div>
+          <div class="detail-item"><span class="k">计划 ID</span><span class="v" id="plan-d-id">pln_20260801_001</span></div>
+          <div class="detail-item"><span class="k">状态</span><span class="v"><span class="tag cyan">运行中</span></span></div>
+          <div class="detail-item"><span class="k">定时</span><span class="v">0 2 * * * · 每日 02:00</span></div>
+          <div class="detail-item"><span class="k">执行策略</span><span class="v">失败继续</span></div>
+          <div class="detail-item"><span class="k">任务数</span><span class="v">5</span></div>
+          <div class="drawer-sec">任务编排（拖拽排序）</div>
+          <div class="pick-list" id="plan-tasks" style="margin-bottom:12px">
+            <div class="pick-item sel"><span class="grip">⋮⋮</span><span class="p-order">1</span>登录测试<span style="margin-left:auto" class="tag cyan">运行中</span></div>
+            <div class="pick-item sel"><span class="grip">⋮⋮</span><span class="p-order">2</span>注册流程<span style="margin-left:auto" class="tag gray">排队</span></div>
+            <div class="pick-item sel"><span class="grip">⋮⋮</span><span class="p-order">3</span>订单查询<span style="margin-left:auto" class="tag gray">排队</span></div>
+            <div class="pick-item sel"><span class="grip">⋮⋮</span><span class="p-order">4</span>支付测试<span style="margin-left:auto" class="tag gray">排队</span></div>
+            <div class="pick-item sel"><span class="grip">⋮⋮</span><span class="p-order">5</span>购物车<span style="margin-left:auto" class="tag gray">排队</span></div>
+          </div>
+          <div class="drawer-sec">执行历史</div>
+          <div class="detail-item"><span class="k">08-29 02:00</span><span class="v" style="color:var(--success)">通过 5/5</span></div>
+          <div class="detail-item"><span class="k">08-28 02:00</span><span class="v" style="color:var(--danger)">失败 4/5</span></div>
+          <div class="detail-item"><span class="k">08-27 02:00</span><span class="v" style="color:var(--success)">通过 5/5</span></div>
+        </div>
+        <div class="drawer-foot"><button class="btn danger">暂停计划</button><button class="btn primary">查看报告</button></div>
+      </aside>
+
+      <!-- ===== 新建计划弹窗 ===== -->
+      <div class="modal-mask" id="plan-modal-mask" onclick="closePlanModal()"></div>
+      <div class="modal" id="plan-modal">
+        <div class="modal-head"><h3 id="plan-modal-title">新建测试计划</h3><span class="modal-x" onclick="closePlanModal()">&times;</span></div>
+        <div class="modal-body">
+          <div class="field"><label>计划名称 <i>*</i></label><input id="pl-name" placeholder="例如：每日回归"></div>
+          <div class="field"><label>选择任务（点击勾选，拖动排序） <i>*</i></label>
+            <div class="pick-list" id="pl-pick">
+              <div class="pick-item sel"><span class="grip">⋮⋮</span><span class="p-order">1</span>登录测试<span class="mono" style="margin-left:auto;color:var(--text3);font-size:11px">浏览器录制</span></div>
+              <div class="pick-item sel"><span class="grip">⋮⋮</span><span class="p-order">2</span>注册流程<span class="mono" style="margin-left:auto;color:var(--text3);font-size:11px">AI 录制</span></div>
+              <div class="pick-item sel"><span class="grip">⋮⋮</span><span class="p-order">3</span>订单查询<span class="mono" style="margin-left:auto;color:var(--text3);font-size:11px">浏览器录制</span></div>
+              <div class="pick-item"><span class="grip">⋮⋮</span><span class="p-order">4</span>支付测试<span class="mono" style="margin-left:auto;color:var(--text3);font-size:11px">AI 录制</span></div>
+              <div class="pick-item"><span class="grip">⋮⋮</span><span class="p-order">5</span>购物车<span class="mono" style="margin-left:auto;color:var(--text3);font-size:11px">AI 录制</span></div>
+              <div class="pick-item"><span class="grip">⋮⋮</span><span class="p-order">6</span>API 网关<span class="mono" style="margin-left:auto;color:var(--text3);font-size:11px">浏览器录制</span></div>
+            </div></div>
+          <div class="f-row">
+            <div class="field"><label>定时（Cron）</label><input class="mono" placeholder="如 0 2 * * *（留空=手动）"></div>
+            <div class="field"><label>执行策略</label><select><option>失败继续（推荐）</option><option>失败即中断</option></select></div>
+          </div>
+          <div class="switch-line" style="justify-content:space-between"><span>执行后生成汇总报告</span><span class="filter-chip on">开启</span></div>
+        </div>
+        <div class="modal-foot"><button class="btn ghost" onclick="closePlanModal()">取消</button><button class="btn primary" onclick="closePlanModal();toast('计划已创建','每日回归 · 3 个任务')">保存计划</button></div>
+      </div>
+
+
+      <!-- ===== 报告列表 ===== -->
+            <!-- ===== 报告列表（细化） ===== -->
+      <section class="page" id="page-reports">
+        <div class="page-title">测试报告中心 <span style="margin-left:auto" class="h-row"><button class="btn" onclick="toast('报告已刷新')">↻ 刷新</button></span></div>
+        <div class="page-sub">支持按任务 / 计划 / 状态 / 时间筛选 · 单次执行独立生成报告</div>
+        <div class="toolbar">
+          <div class="tb-search"><span style="opacity:.6">🔍</span><input id="report-search" placeholder="搜索报告名称 / 任务…"></div>
+          <div class="fc-group" id="rpt-type-filters">
+            <span class="filter-chip on" data-f="all">全部<span class="cnt">12</span></span>
+            <span class="filter-chip" data-f="task">任务报告<span class="cnt">8</span></span>
+            <span class="filter-chip" data-f="plan">计划报告<span class="cnt">4</span></span>
+          </div>
+          <div class="fc-group" id="rpt-status-filters">
+            <span class="filter-chip on" data-f="all">全部状态</span>
+            <span class="filter-chip" data-f="pass">通过</span>
+            <span class="filter-chip" data-f="fail">失败</span>
+            <span class="filter-chip" data-f="partial">部分失败</span>
+          </div>
+          <span style="flex:1"></span>
+          <select style="width:auto;padding:7px 10px;font-size:12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)" onchange="toast('已按时间筛选：'+this.value)">
+            <option>近 7 天</option><option>近 30 天</option><option>全部时间</option>
+          </select>
+          <button class="btn ghost" onclick="toast('已批量删除所选报告','2 份')">🗑 批量删除</button>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <table>
+            <thead><tr><th style="width:30px"><input type="checkbox" id="rpt-check-all" style="accent-color:var(--primary)"></th><th>报告名称</th><th>任务/计划</th><th>类型</th><th>通过率</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr style="cursor:pointer" onclick="go('page-report')"><td onclick="event.stopPropagation()"><input type="checkbox" style="accent-color:var(--primary)"></td><td class="mono" style="color:var(--primary)">report_20260829_001</td><td>登录测试</td><td><span class="rpt-tag">任务</span></td><td style="min-width:130px"><div class="bar" style="width:90px;display:inline-block;vertical-align:middle"><i style="width:100%;background:var(--success)"></i></div><span class="mono" style="margin-left:8px;color:var(--success)">100%</span></td><td><span class="tag green">通过</span></td><td class="mono">14:30</td><td>📄 📎</td></tr>
+              <tr style="cursor:pointer"><td onclick="event.stopPropagation()"><input type="checkbox" style="accent-color:var(--primary)"></td><td class="mono" style="color:var(--primary)">report_20260829_002</td><td>每日回归（计划）</td><td><span class="rpt-tag" style="color:var(--primary)">计划</span></td><td><div class="bar" style="width:90px;display:inline-block;vertical-align:middle"><i style="width:80%;background:var(--warn)"></i></div><span class="mono" style="margin-left:8px;color:var(--warn)">80%</span></td><td><span class="tag red">失败</span></td><td class="mono">02:00</td><td>📄 📎</td></tr>
+              <tr style="cursor:pointer"><td onclick="event.stopPropagation()"><input type="checkbox" style="accent-color:var(--primary)"></td><td class="mono" style="color:var(--primary)">report_20260828_003</td><td>冒烟测试（计划）</td><td><span class="rpt-tag" style="color:var(--primary)">计划</span></td><td><div class="bar" style="width:90px;display:inline-block;vertical-align:middle"><i style="width:100%;background:var(--success)"></i></div><span class="mono" style="margin-left:8px;color:var(--success)">100%</span></td><td><span class="tag green">通过</span></td><td class="mono">08-28</td><td>📄 📎</td></tr>
+              <tr style="cursor:pointer"><td onclick="event.stopPropagation()"><input type="checkbox" style="accent-color:var(--primary)"></td><td class="mono" style="color:var(--primary)">report_20260828_004</td><td>登录测试</td><td><span class="rpt-tag">任务</span></td><td><div class="bar" style="width:90px;display:inline-block;vertical-align:middle"><i style="width:90%;background:var(--warn)"></i></div><span class="mono" style="margin-left:8px;color:var(--warn)">90%</span></td><td><span class="tag amber">部分失败</span></td><td class="mono">08-28</td><td>📄 📎</td></tr>
+              <tr style="cursor:pointer"><td onclick="event.stopPropagation()"><input type="checkbox" style="accent-color:var(--primary)"></td><td class="mono" style="color:var(--primary)">report_20260827_005</td><td>核心流程回归（计划）</td><td><span class="rpt-tag" style="color:var(--primary)">计划</span></td><td><div class="bar" style="width:90px;display:inline-block;vertical-align:middle"><i style="width:62%;background:var(--danger)"></i></div><span class="mono" style="margin-left:8px;color:var(--danger)">62%</span></td><td><span class="tag red">失败</span></td><td class="mono">08-27</td><td>📄 📎</td></tr>
+            </tbody>
+          </table>
+          <div class="pager">
+            <button class="pg" disabled>«</button><button class="pg on">1</button><button class="pg">2</button><button class="pg">3</button><button class="pg">»</button>
+            <span style="font-size:11px;color:var(--text3);margin-left:8px" class="mono">共 12 条 · 保留最近 100 份 / 90 天</span>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ===== 报告详情 ===== -->
+            <!-- ===== 报告详情（细化） ===== -->
+      <section class="page" id="page-report">
+        <div class="page-title">测试报告 <span class="mono" style="color:var(--text3);font-size:13px">report_20260829_001</span>
+          <span style="margin-left:auto" class="h-row"><button class="btn" onclick="exportReport(this,'HTML')">导出 HTML</button><button class="btn primary" onclick="exportReport(this,'PDF')">导出 PDF</button></span></div>
+        <div class="page-sub">登录测试 · 2026-08-29 14:30:25 ~ 14:30:37 · <span class="rpt-tag">任务报告</span></div>
+        <div class="export-bar" id="export-bar"><span class="p-mini">导出进度</span><div class="bar" style="flex:1"><i style="width:0%"></i></div><span class="p-mini" id="export-pct">0%</span></div>
+        <div class="rpt-grid4">
+          <div class="rpt-stat"><div class="lbl">通过率</div><div class="donut-wrap" style="margin-top:8px"><div class="donut" style="background:conic-gradient(var(--success) 0 100%,var(--border2) 100%)"><b>100<small>%</small></b></div></div><div class="delta flat" style="margin-top:8px">8 / 8 通过</div></div>
+          <div class="rpt-stat"><div class="lbl">总步骤</div><div class="num">8</div><div class="delta flat">含断言 3</div></div>
+          <div class="rpt-stat"><div class="lbl">通过</div><div class="num" style="color:var(--success)">8</div><div class="delta up">▲ 100% 通过率</div></div>
+          <div class="rpt-stat"><div class="lbl">失败</div><div class="num" style="color:var(--danger)">0</div><div class="delta flat">失败步骤 0</div></div>
+        </div>
+        <div class="rpt-main">
+          <div class="rpt-card"><h4>执行趋势</h4>
+            <div class="trend-tools"><div class="seg"><span class="on">日</span><span>周</span><span>月</span></div></div>
+            <div class="chart">
+              <div class="barx"><div class="b" style="height:40%"></div><span class="x">08-25</span></div>
+              <div class="barx"><div class="b" style="height:62%"></div><span class="x">08-26</span></div>
+              <div class="barx"><div class="b" style="height:55%"></div><span class="x">08-27</span></div>
+              <div class="barx"><div class="b" style="height:78%"></div><span class="x">08-28</span></div>
+              <div class="barx"><div class="b" style="height:100%;background:linear-gradient(180deg,var(--success),color-mix(in srgb,var(--success) 40%,transparent))"></div><span class="x">08-29</span></div>
+            </div>
+            <div class="legend"><span><i style="background:var(--primary)"></i>通过率</span><span><i style="background:var(--danger)"></i>失败标记</span></div>
+          </div>
+          <div class="rpt-card"><h4>测试摘要</h4><div class="sum-list">
+            <div class="sum-item"><span class="k">任务名称</span><span class="v">登录测试_20260829</span></div>
+            <div class="sum-item"><span class="k">浏览器</span><span class="v">Chromium 120</span></div>
+            <div class="sum-item"><span class="k">录制类型</span><span class="v">浏览器录制</span></div>
+            <div class="sum-item"><span class="k">状态</span><span class="v" style="color:var(--success)">通过</span></div>
+            <div class="sum-item"><span class="k">耗时</span><span class="v">12.3s</span></div>
+            <div class="sum-item"><span class="k">环境</span><span class="v">Windows 11 · 单机</span></div>
+            <div class="sum-item"><span class="k">视频</span><span class="v">video.mp4</span></div>
+          </div></div>
+        </div>
+        <div class="video" id="rpt-video" onclick="toggleVideo(this)">
+          <div class="play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+          <div class="vctrl"><span class="v-play" onclick="event.stopPropagation();toggleVideo(document.getElementById('rpt-video'))">⏸</span><span class="v-time">00:04.2 / 00:12.3</span><div class="v-bar"><i style="width:34%"></i></div></div>
+        </div>
+        <div class="rpt-card"><h4>步骤详情 <span style="float:right;font-weight:400;color:var(--text3);font-size:11.5px" class="mono">点击行展开命令详情</span></h4>
+          <table>
+            <thead><tr><th>步骤</th><th>操作</th><th>定位器</th><th>状态</th><th>耗时</th><th>截图</th><th></th></tr></thead>
+            <tbody>
+              <tr class="step-row" onclick="toggleStep(this)"><td class="mono">1</td><td>打开登录页</td><td class="mono" style="color:var(--text3);font-size:11px">goto</td><td><span class="tag green">通过</span></td><td class="mono">1.2s</td><td><span class="mini" style="cursor:pointer" title="点击定位截图" onclick="toast('已定位到步骤截图', 'step_'+this.closest('tr').querySelector('.mono').textContent.trim())"></span></td><td class="fold-tip">▸</td></tr>
+              <tr class="step-detail-row" style="display:none"><td colspan="7"><div class="step-detail"><div class="sd-line"><span class="k">命令</span>page.goto('https://demo.test.com/login')</div><div class="sd-line"><span class="k">状态码</span>200</div><div class="sd-line ok"><span class="k">结果</span>✓ 页面加载完成</div></div></td></tr>
+              <tr class="step-row" onclick="toggleStep(this)"><td class="mono">2</td><td>输入用户名</td><td class="mono" style="color:var(--text3);font-size:11px">input[name=username]</td><td><span class="tag green">通过</span></td><td class="mono">0.5s</td><td><span class="mini" style="cursor:pointer" title="点击定位截图" onclick="toast('已定位到步骤截图', 'step_'+this.closest('tr').querySelector('.mono').textContent.trim())"></span></td><td class="fold-tip">▸</td></tr>
+              <tr class="step-detail-row" style="display:none"><td colspan="7"><div class="step-detail"><div class="sd-line"><span class="k">命令</span>page.fill('input[name=username]','admin')</div><div class="sd-line ok"><span class="k">结果</span>✓ 输入成功</div></div></td></tr>
+              <tr class="step-row" onclick="toggleStep(this)"><td class="mono">3</td><td>输入密码</td><td class="mono" style="color:var(--text3);font-size:11px">input[name=password]</td><td><span class="tag green">通过</span></td><td class="mono">0.4s</td><td><span class="mini" style="cursor:pointer" title="点击定位截图" onclick="toast('已定位到步骤截图', 'step_'+this.closest('tr').querySelector('.mono').textContent.trim())"></span></td><td class="fold-tip">▸</td></tr>
+              <tr class="step-detail-row" style="display:none"><td colspan="7"><div class="step-detail"><div class="sd-line"><span class="k">命令</span>page.fill('input[name=password]','••••••')</div><div class="sd-line ok"><span class="k">结果</span>✓ 输入成功</div></div></td></tr>
+              <tr class="step-row" onclick="toggleStep(this)"><td class="mono">4</td><td>点击登录</td><td class="mono" style="color:var(--text3);font-size:11px">get_by_role=button, 登录</td><td><span class="tag green">通过</span></td><td class="mono">0.8s</td><td><span class="mini" style="cursor:pointer" title="点击定位截图" onclick="toast('已定位到步骤截图', 'step_'+this.closest('tr').querySelector('.mono').textContent.trim())"></span></td><td class="fold-tip">▸</td></tr>
+              <tr class="step-detail-row" style="display:none"><td colspan="7"><div class="step-detail"><div class="sd-line"><span class="k">命令</span>page.click('[role=button]:has-text("登录")')</div><div class="sd-line ok"><span class="k">结果</span>✓ 跳转 /dashboard</div></div></td></tr>
+              <tr class="step-row" onclick="toggleStep(this)"><td class="mono">5</td><td>验证跳转</td><td class="mono" style="color:var(--text3);font-size:11px">assert url</td><td><span class="tag green">通过</span></td><td class="mono">0.3s</td><td><span class="mini" style="cursor:pointer" title="点击定位截图" onclick="toast('已定位到步骤截图', 'step_'+this.closest('tr').querySelector('.mono').textContent.trim())"></span></td><td class="fold-tip">▸</td></tr>
+              <tr class="step-detail-row" style="display:none"><td colspan="7"><div class="step-detail"><div class="sd-line"><span class="k">命令</span>expect(page).toHaveURL(/dashboard/)</div><div class="sd-line ok"><span class="k">结果</span>✓ 断言通过</div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+
+      <!-- ===== 录制项目 ===== -->
+            <section class="page" id="page-projects">
+        <div class="page-title">录制项目 <span style="margin-left:auto" class="h-row"><button class="btn primary" onclick="go('page-create')">+ 新建项目</button></span></div>
+        <div class="page-sub">AI 录制与浏览器录制统一管理 · 共 5 个项目 · 点击卡片查看详情</div>
+        <div class="proj-grid">
+          <div class="proj" data-name="登录测试" data-type="AI 录制" data-status="就绪" data-tasks="3" onclick="openProj(this)"><div class="top"><span class="proj-ico" style="background:var(--tag-ai-bg);color:var(--tag-ai-tx)">✦</span><span class="name">登录测试</span><span class="tag green" style="margin-left:auto">就绪</span></div>
+            <div class="desc">用户登录流程冒烟，验证跳转与欢迎语。</div><div class="meta"><span class="mono">08-29</span> · <span>AI 录制</span> · <span>3 任务</span></div>
+            <div class="actions"><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();createTaskFromProj(this)">创建任务</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();editProj(this)">编辑</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();confirmDel(this)">删除</button></div></div>
+          <div class="proj" data-name="购物车流程" data-type="浏览器录制" data-status="就绪" data-tasks="2" onclick="openProj(this)"><div class="top"><span class="proj-ico" style="background:var(--tag-br-bg);color:var(--tag-br-tx)">🌐</span><span class="name">购物车流程</span><span class="tag green" style="margin-left:auto">就绪</span></div>
+            <div class="desc">加入购物车、修改数量、结算全流程。</div><div class="meta"><span class="mono">08-28</span> · <span>浏览器录制</span> · <span>2 任务</span></div>
+            <div class="actions"><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();createTaskFromProj(this)">创建任务</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();editProj(this)">编辑</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();confirmDel(this)">删除</button></div></div>
+          <div class="proj" data-name="支付测试" data-type="AI 录制" data-status="草稿" data-tasks="0" onclick="openProj(this)"><div class="top"><span class="proj-ico" style="background:var(--tag-ai-bg);color:var(--tag-ai-tx)">✦</span><span class="name">支付测试</span><span class="tag amber" style="margin-left:auto">草稿</span></div>
+            <div class="desc">三方支付回调与订单状态校验。</div><div class="meta"><span class="mono">08-27</span> · <span>AI 录制</span> · <span>0 任务</span></div>
+            <div class="actions"><button class="btn" style="padding:5px 10px;font-size:12px" disabled>创建任务</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();editProj(this)">编辑</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();confirmDel(this)">删除</button></div></div>
+          <div class="proj" data-name="注册流程" data-type="AI 录制" data-status="就绪" data-tasks="1" onclick="openProj(this)"><div class="top"><span class="proj-ico" style="background:var(--tag-ai-bg);color:var(--tag-ai-tx)">✦</span><span class="name">注册流程</span><span class="tag green" style="margin-left:auto">就绪</span></div>
+            <div class="desc">新用户注册、邮箱验证、资料完善。</div><div class="meta"><span class="mono">08-27</span> · <span>AI 录制</span> · <span>1 任务</span></div>
+            <div class="actions"><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();createTaskFromProj(this)">创建任务</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();editProj(this)">编辑</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();confirmDel(this)">删除</button></div></div>
+          <div class="proj" data-name="订单查询" data-type="浏览器录制" data-status="归档" data-tasks="0" onclick="openProj(this)"><div class="top"><span class="proj-ico" style="background:var(--tag-br-bg);color:var(--tag-br-tx)">🌐</span><span class="name">订单查询</span><span class="tag gray" style="margin-left:auto">归档</span></div>
+            <div class="desc">历史订单查询与状态筛选。</div><div class="meta"><span class="mono">08-26</span> · <span>浏览器录制</span> · <span>0 任务</span></div>
+            <div class="actions"><button class="btn" style="padding:5px 10px;font-size:12px" disabled>创建任务</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();editProj(this)">编辑</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();confirmDel(this)">删除</button></div></div>
+        </div>
+        <div class="entry-banner">
+          <div class="entry"><div><div class="e-t">开始 AI 录制</div><div class="e-d">自然语言描述任务，AI 自主探索生成脚本</div></div><button class="btn primary" onclick="go('page-create')">去录制</button></div>
+          <div class="entry"><div><div class="e-t">开始浏览器录制</div><div class="e-d">手动操作，系统精确捕获并生成步骤</div></div><button class="btn" onclick="go('page-browser')">去录制</button></div>
+        </div>
+      </section>
+
+      <!-- ===== 项目详情抽屉 ===== -->
+      <div class="drawer-mask" id="proj-mask" onclick="closeProj()"></div>
+      <aside class="drawer" id="proj-drawer">
+        <div class="drawer-head"><span class="tag cyan">录制项目</span><h3 id="proj-d-title">登录测试</h3><span class="drawer-x" onclick="closeProj()">&times;</span></div>
+        <div class="drawer-body">
+          <div class="detail-item"><span class="k">项目 ID</span><span class="v" id="proj-d-id">proj_001</span></div>
+          <div class="detail-item"><span class="k">录制类型</span><span class="v" id="proj-d-type">AI 录制</span></div>
+          <div class="detail-item"><span class="k">状态</span><span class="v"><span class="tag green" id="proj-d-status">就绪</span></span></div>
+          <div class="detail-item"><span class="k">创建时间</span><span class="v">2026-08-29</span></div>
+          <div class="detail-item"><span class="k">关联任务</span><span class="v" id="proj-d-tasks">3 个</span></div>
+          <div class="drawer-sec">脚本内容</div>
+          <div class="code-pre"><span class="cm">// login.test.js</span>
+<span class="kw">await</span> page.goto(<span class="st">'/login'</span>);
+<span class="kw">await</span> page.fill(<span class="st">'#username'</span>, <span class="st">'admin'</span>);
+<span class="kw">await</span> page.fill(<span class="st">'#password'</span>, <span class="st">'••••••'</span>);
+<span class="kw">await</span> page.click(<span class="st">'.login-btn'</span>);
+<span class="kw">await</span> page.waitForURL(<span class="st">/dashboard/</span>);</div>
+          <div class="drawer-sec">录制步骤（共 5 步）</div>
+          <div class="pick-list" style="max-height:190px">
+            <div class="pick-item"><span class="p-order">1</span>打开登录页<span style="margin-left:auto;color:var(--text3);font-size:11px" class="mono">navigate</span></div>
+            <div class="pick-item"><span class="p-order">2</span>输入用户名<span style="margin-left:auto;color:var(--text3);font-size:11px" class="mono">input</span></div>
+            <div class="pick-item"><span class="p-order">3</span>输入密码<span style="margin-left:auto;color:var(--text3);font-size:11px" class="mono">input</span></div>
+            <div class="pick-item"><span class="p-order">4</span>点击登录<span style="margin-left:auto;color:var(--text3);font-size:11px" class="mono">click</span></div>
+            <div class="pick-item"><span class="p-order">5</span>验证跳转<span style="margin-left:auto;color:var(--text3);font-size:11px" class="mono">assert</span></div>
+          </div>
+        </div>
+        <div class="drawer-foot"><button class="btn" onclick="editProj(null)">编辑</button><button class="btn primary" onclick="createTaskFromProj(null)">创建任务</button></div>
+      </aside>
+
+      <!-- ===== 项目编辑弹窗 ===== -->
+      <div class="modal-mask" id="proj-modal-mask" onclick="closeProjModal()"></div>
+      <div class="modal" id="proj-modal">
+        <div class="modal-head"><h3 id="proj-modal-title">编辑项目</h3><span class="modal-x" onclick="closeProjModal()">&times;</span></div>
+        <div class="modal-body">
+          <div class="field"><label>项目名称 <i>*</i></label><input id="proj-name"></div>
+          <div class="field"><label>项目描述</label><textarea id="proj-desc" style="min-height:70px"></textarea></div>
+          <div class="f-row">
+            <div class="field"><label>录制类型</label><select id="proj-type"><option>AI 录制</option><option>浏览器录制</option></select></div>
+            <div class="field"><label>状态</label><select id="proj-status"><option>就绪</option><option>草稿</option><option>归档</option></select></div>
+          </div>
+        </div>
+        <div class="modal-foot"><button class="btn ghost" onclick="closeProjModal()">取消</button><button class="btn primary" onclick="closeProjModal();toast('项目已保存','配置已更新')">保存</button></div>
+      </div>
+
+      <!-- ===== 删除确认弹窗 ===== -->
+      <div class="modal-mask" id="confirm-mask" onclick="closeConfirm()"></div>
+      <div class="modal" id="confirm-modal" style="width:400px">
+        <div class="modal-head"><h3 id="confirm-title">确认删除</h3><span class="modal-x" onclick="closeConfirm()">&times;</span></div>
+        <div class="modal-body"><p style="font-size:13px;color:var(--text2);line-height:1.8">确定删除项目 <b id="confirm-target" style="color:var(--text)">登录测试</b> ？<br>将同时删除其关联任务与历史记录，且不可恢复。</p></div>
+        <div class="modal-foot"><button class="btn ghost" onclick="closeConfirm()">取消</button><button class="btn danger" onclick="confirmOk()">确认删除</button></div>
+      </div>
+<!-- ===== 交互调试 ===== -->
+      <section class="page" id="page-debug">
+        <div class="page-title">交互调试 <span class="tag cyan">Debug Session</span></div>
+        <div class="page-sub">高亮 / 拾取 / 单步执行 · 录制与编辑期页面内实时交互</div>
+        <div class="debug-wrap">
+          <div class="card"><h4 style="font-size:13px;margin-bottom:12px;color:var(--text2)">步骤单步执行</h4>
+            <div class="dbg-step"><span class="tag ai">click</span><span>用户名输入框</span><span class="sel" style="color:var(--text3);font-size:11px" class="mono">#username</span><span class="run"><button class="btn" style="padding:3px 10px;font-size:12px" onclick="runDbg(this)">▶ 执行</button></span><span class="st">✓ 通过</span></div>
+            <div class="dbg-step"><span class="tag ai">input</span><span>密码输入框</span><span class="sel" style="color:var(--text3);font-size:11px" class="mono">input[name=pass]</span><span class="run"><button class="btn" style="padding:3px 10px;font-size:12px" onclick="runDbg(this)">▶ 执行</button></span><span class="st">✓ 通过</span></div>
+            <div class="dbg-step"><span class="tag browser">click</span><span>登录按钮</span><span class="sel" style="color:var(--text3);font-size:11px" class="mono">button: 登录</span><span class="run"><button class="btn" style="padding:3px 10px;font-size:12px" onclick="runDbg(this)">▶ 执行</button></span><span class="st" style="color:var(--danger)">✕ 定位失败</span></div>
+            <div class="dbg-step"><span class="tag browser">navigate</span><span>跳转 /dashboard</span><span class="sel" style="color:var(--text3);font-size:11px" class="mono">url</span><span class="run"><button class="btn" style="padding:3px 10px;font-size:12px" onclick="runDbg(this)">▶ 执行</button></span><span class="st">-</span></div>
+            <div style="margin-top:14px;padding:10px 12px;background:var(--primary-dim);border-radius:var(--radius);font-size:12px;color:var(--text2)">💡 拾取模式：悬停页面元素并点击，自动回填定位器到当前步骤（Ctrl+Shift+U）</div>
+          </div>
+          <div>
+            <div class="card" style="margin-bottom:14px"><h4 style="font-size:13px;margin-bottom:10px;color:var(--text2)">页面内热键</h4>
+              <div class="hotkey"><span>拾取元素</span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd></div>
+              <div class="hotkey"><span>元素高亮</span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd></div>
+              <div class="hotkey"><span>元素检查</span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></div>
+              <div class="hotkey"><span>调试面板</span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd></div></div>
+            <div class="card"><h4 style="font-size:13px;margin-bottom:10px;color:var(--text2)">调试日志</h4>
+              <div class="dbg-log"><div><span class="t">14:31:02</span> <span class="ok">[command_result] highlight #username</span></div>
+                <div><span class="t">14:31:05</span> <span class="err">[step_failed] click button:登录 定位失败</span></div>
+                <div><span class="t">14:31:07</span> <span class="info">[log] 已切换候选定位器 -> [role=button][name=登录]</span></div></div></div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== 导航 =====
+  const crumbMap={projects:"录制项目",dashboard:"测试任务",plans:"测试计划",reports:"测试报告",create:"新建录制",ai:"AI 录制",browser:"浏览器录制",exec:"执行监控",debug:"交互调试",report:"报告详情"};
+  function go(id){
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    const target=document.getElementById(id);
+    target.classList.add('active');
+    const nav=document.querySelector('.nav-item[data-page="'+id+'"]');
+    if(nav)nav.classList.add('active');
+    document.getElementById('crumb').textContent=crumbMap[id.replace('page-','')]||'';
+    document.querySelector('.content').scrollTop=0;
+  }
+  document.querySelectorAll('.nav-item[data-page]').forEach(el=>el.addEventListener('click',()=>go(el.dataset.page)));
+
+  // ===== 主题切换 =====
+  const ths=document.querySelectorAll('.theme-switch span');
+  function setTheme(t){
+    document.body.setAttribute('data-theme',t);
+    ths.forEach(s=>s.classList.toggle('on',s.dataset.themeVal===t));
+  }
+  ths.forEach(s=>s.addEventListener('click',()=>setTheme(s.dataset.themeVal)));
+  setTheme('dark');
+
+  // ===== 看板/列表切换 =====
+  document.querySelectorAll('#view-seg span').forEach(s=>s.addEventListener('click',()=>{
+    document.querySelectorAll('#view-seg span').forEach(x=>x.classList.remove('on'));
+    s.classList.add('on');
+    const isKanban=s.dataset.view==='kanban';
+    document.getElementById('board').style.display=isKanban?'grid':'none';
+    document.getElementById('tasktable').classList.toggle('show',!isKanban);
+  }));
+
+  // ===== 看板拖拽 =====
+  document.querySelectorAll('.taskcard[draggable]').forEach(c=>{
+    c.addEventListener('dragstart',e=>{c.classList.add('dragging');e.dataTransfer.setData('text/plain','');});
+    c.addEventListener('dragend',()=>c.classList.remove('dragging'));
+  });
+  document.querySelectorAll('.col').forEach(col=>{
+    col.addEventListener('dragover',e=>{e.preventDefault();col.classList.add('hover');});
+    col.addEventListener('dragleave',()=>col.classList.remove('hover'));
+    col.addEventListener('drop',e=>{e.preventDefault();col.classList.remove('hover');
+      const d=document.querySelector('.dragging');if(d){col.appendChild(d);col.querySelector('.col-count').textContent=col.querySelectorAll('.taskcard').length;}});
+  });
+
+  // ===== 录制创建：类型切换 =====
+  const tcAi=document.getElementById('tc-ai'),tcBr=document.getElementById('tc-browser');
+  function setType(ai){
+    tcAi.classList.toggle('on',ai);tcBr.classList.toggle('on',!ai);
+    document.getElementById('f-ai').style.display=ai?'block':'none';
+    document.getElementById('f-ai-desc').style.display=ai?'block':'none';
+    document.getElementById('f-browser').style.display=ai?'none':'block';
+  }
+  tcAi.addEventListener('click',()=>setType(true));
+  tcBr.addEventListener('click',()=>setType(false));
+
+  // ===== 执行监控日志追加 =====
+  const logEl=document.getElementById('log');
+  const logs=[['14:30:38','info','[INFO] 等待断言 目标URL 匹配'],['14:30:39','ok','[SUCCESS] 断言通过'],['14:30:40','info','[INFO] 正在生成报告…'],['14:30:41','ok','[SUCCESS] 任务完成，报告已生成']];
+  let li=0;
+  setInterval(()=>{if(li<logs.length&&document.getElementById('page-exec').classList.contains('active')){
+    const [t,lv,msg]=logs[li++];const div=document.createElement('div');
+    div.innerHTML='<span class="t">'+t+'</span> <span class="'+(lv==='ok'?'ok':'info')+'">'+msg+'</span>';
+    logEl.appendChild(div);logEl.scrollTop=logEl.scrollHeight;}},1800);
+
+  // ========== UX 交互细化：任务 / 计划 / 报告 ==========
+  // ---- toast 提示 ----
+  let toastTimer=null;
+  function toast(msg,sub){
+    let t=document.getElementById('g-toast');
+    if(!t){t=document.createElement('div');t.id='g-toast';t.className='toast';document.body.appendChild(t);}
+    t.innerHTML=msg+(sub?'<small>'+sub+'</small>':'');
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>t.classList.remove('show'),2200);
+  }
+
+  // ---- 任务详情抽屉 ----
+  function openTask(el){
+    document.getElementById('task-d-title').textContent=el.getAttribute('data-name')||'测试任务';
+    document.getElementById('task-d-browser').textContent=el.getAttribute('data-browser')||'Chromium 120';
+    document.getElementById('task-mask').classList.add('show');
+    document.getElementById('task-drawer').classList.add('show');
+  }
+  function openTaskRow(name){
+    document.getElementById('task-d-title').textContent=name;
+    document.getElementById('task-mask').classList.add('show');
+    document.getElementById('task-drawer').classList.add('show');
+  }
+  function closeTask(){
+    document.getElementById('task-mask').classList.remove('show');
+    document.getElementById('task-drawer').classList.remove('show');
+  }
+
+  // ---- 计划详情抽屉 ----
+  function openPlan(el){
+    document.getElementById('plan-d-title').textContent=el.getAttribute('data-name');
+    document.getElementById('plan-mask').classList.add('show');
+    document.getElementById('plan-drawer').classList.add('show');
+  }
+  function closePlan(){
+    document.getElementById('plan-mask').classList.remove('show');
+    document.getElementById('plan-drawer').classList.remove('show');
+  }
+
+  // ---- 新建计划弹窗 ----
+  function openPlanModal(){
+    document.getElementById('plan-modal-mask').classList.add('show');
+    document.getElementById('plan-modal').classList.add('show');
+  }
+  function closePlanModal(){
+    document.getElementById('plan-modal-mask').classList.remove('show');
+    document.getElementById('plan-modal').classList.remove('show');
+  }
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeTask();closePlan();closePlanModal();}});
+
+  // ---- 新建计划弹窗：任务勾选（点击切换，重排选中序号）----
+  document.querySelectorAll('#pl-pick .pick-item').forEach(item=>{
+    item.addEventListener('click',()=>{
+      item.classList.toggle('sel');
+      let i=1;
+      document.querySelectorAll('#pl-pick .pick-item').forEach(x=>{
+        x.querySelector('.p-order').textContent=x.classList.contains('sel')?String(i++):'·';
+      });
+    });
+  });
+
+  // ---- 任务：搜索 + 状态筛选（看板列 + 列表行）----
+  function applyTaskFilter(){
+    const inp=document.getElementById('task-search');
+    const kw=(inp?inp.value:'').trim().toLowerCase();
+    const f=document.querySelector('#task-filters .filter-chip.on');
+    const ff=f?f.dataset.f:'all';
+    document.querySelectorAll('#board .col').forEach(col=>{
+      col.style.display=(ff==='all'||col.dataset.col===ff)?'':'none';
+      let vis=0;
+      col.querySelectorAll('.taskcard').forEach(c=>{
+        const ok=kw===''||(c.getAttribute('data-name')||'').toLowerCase().includes(kw);
+        c.style.display=ok?'':'none';
+        if(ok)vis++;
+      });
+      const cc=col.querySelector('.col-count');if(cc)cc.textContent=vis;
+    });
+    document.querySelectorAll('#task-tbody tr').forEach(tr=>{
+      const ok=kw===''||(tr.getAttribute('data-row')||'').toLowerCase().includes(kw);
+      tr.style.display=ok?'':'none';
+    });
+  }
+  const taskSearch=document.getElementById('task-search');
+  if(taskSearch)taskSearch.addEventListener('input',applyTaskFilter);
+  document.querySelectorAll('#task-filters .filter-chip').forEach(c=>c.addEventListener('click',()=>{
+    document.querySelectorAll('#task-filters .filter-chip').forEach(x=>x.classList.remove('on'));
+    c.classList.add('on');
+    applyTaskFilter();
+  }));
+
+  // ---- 任务列表：批量勾选 ----
+  const checkAll=document.getElementById('check-all');
+  const selCount=document.getElementById('sel-count');
+  function updSel(){if(selCount)selCount.textContent=document.querySelectorAll('.row-check:checked').length;}
+  if(checkAll)checkAll.addEventListener('change',()=>{
+    document.querySelectorAll('.row-check').forEach(c=>c.checked=checkAll.checked);
+    updSel();
+  });
+  document.querySelectorAll('.row-check').forEach(c=>c.addEventListener('change',updSel));
+
+  // ---- 任务列表：表头排序（演示切换箭头）----
+  document.querySelectorAll('th.sortable').forEach(th=>th.addEventListener('click',()=>{
+    const dir=th.dataset.dir==='asc'?'desc':'asc';
+    th.dataset.dir=dir;
+    th.querySelector('.sort-arrow').textContent=dir==='asc'?'↑':'↓';
+    const lbl=(th.textContent||'').replace(/[↑↓↕]/g,'').trim();
+    toast('已按「'+lbl+'」排序',dir==='asc'?'升序':'降序');
+  }));
+
+  // ---- 计划：搜索 + 状态筛选 ----
+  function applyPlanFilter(){
+    const inp=document.getElementById('plan-search');
+    const kw=(inp?inp.value:'').trim().toLowerCase();
+    const f=document.querySelector('#plan-filters .filter-chip.on');
+    const ff=f?f.dataset.f:'all';
+    document.querySelectorAll('#plan-grid .plan').forEach(p=>{
+      const ok=(kw===''||(p.getAttribute('data-name')||'').toLowerCase().includes(kw))&&(ff==='all'||p.dataset.f===ff);
+      p.style.display=ok?'':'none';
+    });
+  }
+  const planSearch=document.getElementById('plan-search');
+  if(planSearch)planSearch.addEventListener('input',applyPlanFilter);
+  document.querySelectorAll('#plan-filters .filter-chip').forEach(c=>c.addEventListener('click',()=>{
+    document.querySelectorAll('#plan-filters .filter-chip').forEach(x=>x.classList.remove('on'));
+    c.classList.add('on');
+    applyPlanFilter();
+  }));
+
+  // ---- 报告：搜索 + 类型/状态筛选 ----
+  function applyReportFilter(){
+    const inp=document.getElementById('report-search');
+    const kw=(inp?inp.value:'').trim().toLowerCase();
+    const tf=document.querySelector('#rpt-type-filters .filter-chip.on');
+    const tff=tf?tf.dataset.f:'all';
+    const sf=document.querySelector('#rpt-status-filters .filter-chip.on');
+    const sff=sf?sf.dataset.f:'all';
+    document.querySelectorAll('#page-reports tbody tr').forEach(tr=>{
+      const name=(tr.cells[1].textContent+tr.cells[2].textContent).toLowerCase();
+      const type=tr.cells[3].textContent.indexOf('计划')>=0?'plan':'task';
+      const stext=tr.cells[5].textContent;
+      const st=stext.indexOf('部分失败')>=0?'partial':stext.indexOf('失败')>=0?'fail':'pass';
+      const ok=(kw===''||name.includes(kw))&&(tff==='all'||type===tff)&&(sff==='all'||st===sff);
+      tr.style.display=ok?'':'none';
+    });
+  }
+  const reportSearch=document.getElementById('report-search');
+  if(reportSearch)reportSearch.addEventListener('input',applyReportFilter);
+  document.querySelectorAll('#rpt-type-filters .filter-chip').forEach(c=>c.addEventListener('click',()=>{
+    document.querySelectorAll('#rpt-type-filters .filter-chip').forEach(x=>x.classList.remove('on'));
+    c.classList.add('on');applyReportFilter();
+  }));
+  document.querySelectorAll('#rpt-status-filters .filter-chip').forEach(c=>c.addEventListener('click',()=>{
+    document.querySelectorAll('#rpt-status-filters .filter-chip').forEach(x=>x.classList.remove('on'));
+    c.classList.add('on');applyReportFilter();
+  }));
+
+  // ---- 报告列表：全选 ----
+  const rptCheckAll=document.getElementById('rpt-check-all');
+  if(rptCheckAll)rptCheckAll.addEventListener('change',()=>{
+    document.querySelectorAll('#page-reports tbody input[type=checkbox]').forEach(c=>c.checked=rptCheckAll.checked);
+  });
+
+  // ---- 报告详情：步骤折叠 ----
+  function toggleStep(tr){
+    const dtr=tr.nextElementSibling;
+    if(dtr&&dtr.classList.contains('step-detail-row')){
+      const dd=dtr.querySelector('.step-detail');
+      const show=!dd.classList.contains('show');
+      dd.classList.toggle('show',show);
+      dtr.style.display=show?'':'none';
+      const tip=tr.querySelector('.fold-tip');if(tip)tip.textContent=show?'▾':'▸';
+    }
+  }
+
+  // ---- 报告详情：视频播放/暂停 ----
+  function toggleVideo(el){
+    el.classList.toggle('playing');
+    const play=el.querySelector('.play');
+    if(play)play.style.display=el.classList.contains('playing')?'none':'flex';
+  }
+
+
+  // ========== 测试任务：分步表单 / 调度 / 历史回放 ==========
+  let wizStep=1;
+  function wizNext(){ if(wizStep<4){wizStep++;wizRender();} }
+  function wizPrev(){ if(wizStep>1){wizStep--;wizRender();} }
+  function wizRender(){
+    for(let i=1;i<=4;i++){
+      const wp=document.getElementById('wp-'+i); if(wp)wp.classList.toggle('on', i===wizStep);
+      const ws=document.querySelector('.w-step[data-ws="'+i+'"]');
+      if(ws){ws.classList.toggle('on', i===wizStep);ws.classList.toggle('done', i<wizStep);}
+    }
+    document.querySelectorAll('#page-task-create .wizard .w-line').forEach((l,idx)=>l.classList.toggle('done', idx<wizStep-1));
+    if(wizStep===4)updateSummary();
+    const c=document.querySelector('.content'); if(c)c.scrollTop=0;
+  }
+  function updateSummary(){
+    const nm=document.getElementById('task-name'); if(nm)document.getElementById('sum-name').textContent=nm.value||'（未命名任务）';
+    const ds=document.getElementById('task-desc'); if(ds)document.getElementById('sum-desc').textContent=ds.value||'（无描述）';
+    const srcUp=document.getElementById('src-upload');
+    document.getElementById('sum-src').textContent=srcUp&&srcUp.classList.contains('on')?'上传 login.test.js':'录制项目：登录项目';
+    let sch='手动执行';
+    if(document.getElementById('sch-time').classList.contains('on')){
+      const v=document.getElementById('dur-val').value, u=document.getElementById('dur-unit').value;
+      sch='按时间循环 · '+v+' '+u;
+    }else if(document.getElementById('sch-count').classList.contains('on')){
+      sch='按次数循环 · '+document.getElementById('count-val').value+' 次';
+    }
+    document.getElementById('sum-sch').textContent=sch;
+  }
+  function setScriptSrc(mode){
+    document.getElementById('src-upload').classList.toggle('on', mode==='upload');
+    document.getElementById('src-project').classList.toggle('on', mode==='project');
+    document.getElementById('sc-upload').style.display=mode==='upload'?'block':'none';
+    document.getElementById('sc-project').style.display=mode==='project'?'block':'none';
+  }
+  function setSchedule(mode){
+    document.getElementById('sch-manual').classList.toggle('on', mode==='manual');
+    document.getElementById('sch-time').classList.toggle('on', mode==='time');
+    document.getElementById('sch-count').classList.toggle('on', mode==='count');
+    document.getElementById('f-sch-time').style.display=mode==='time'?'block':'none';
+    document.getElementById('f-sch-count').style.display=mode==='count'?'block':'none';
+  }
+  // ---- 历史回放抽屉 ----
+  function openReplay(title){
+    document.getElementById('replay-title').textContent=title+' · 回放';
+    document.getElementById('replay-mask').classList.add('show');
+    document.getElementById('replay-drawer').classList.add('show');
+  }
+  function closeReplay(){
+    document.getElementById('replay-mask').classList.remove('show');
+    document.getElementById('replay-drawer').classList.remove('show');
+  }
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeReplay();});
+
+
+  // ========== 录制项目：详情/编辑/删除/创建任务 ==========
+  function openProj(el){
+    const name=el.getAttribute('data-name');
+    document.getElementById('proj-d-title').textContent=name;
+    document.getElementById('proj-d-id').textContent='proj_'+name.replace(/\s/g,'');
+    document.getElementById('proj-d-type').textContent=el.getAttribute('data-type');
+    document.getElementById('proj-d-tasks').textContent=el.getAttribute('data-tasks')+' 个';
+    const st=el.getAttribute('data-status');
+    const tag=document.getElementById('proj-d-status');
+    tag.textContent=st;
+    tag.className='tag '+((st==='就绪')?'green':(st==='草稿'?'amber':'gray'));
+    document.getElementById('proj-mask').classList.add('show');
+    document.getElementById('proj-drawer').classList.add('show');
+  }
+  function closeProj(){
+    document.getElementById('proj-mask').classList.remove('show');
+    document.getElementById('proj-drawer').classList.remove('show');
+  }
+  function projNameOf(el){
+    if(el&&el.getAttribute&&el.getAttribute('data-name'))return el.getAttribute('data-name');
+    return document.getElementById('proj-d-title').textContent;
+  }
+  function editProj(el){
+    const name=projNameOf(el);
+    document.getElementById('proj-modal-title').textContent='编辑项目 · '+name;
+    document.getElementById('proj-name').value=name;
+    document.getElementById('proj-desc').value='';
+    if(el&&el.closest&&el.closest('.proj')){
+      document.getElementById('proj-type').value=el.closest('.proj').getAttribute('data-type');
+    }
+    document.getElementById('proj-modal-mask').classList.add('show');
+    document.getElementById('proj-modal').classList.add('show');
+  }
+  function closeProjModal(){
+    document.getElementById('proj-modal-mask').classList.remove('show');
+    document.getElementById('proj-modal').classList.remove('show');
+  }
+  function confirmDel(el){
+    const name=projNameOf(el);
+    confirmType='proj';
+    document.getElementById('confirm-title').textContent='确认删除项目';
+    document.getElementById('confirm-target').textContent=name;
+    document.getElementById('confirm-mask').classList.add('show');
+    document.getElementById('confirm-modal').classList.add('show');
+  }
+  function closeConfirm(){
+    document.getElementById('confirm-mask').classList.remove('show');
+    document.getElementById('confirm-modal').classList.remove('show');
+  }
+  function createTaskFromProj(el){
+    const name=projNameOf(el);
+    closeProj();
+    if(!document.querySelector('#page-task-create')){toast('请先创建测试任务分步表单');return;}
+    go('page-task-create'); wizStep=1; wizRender();
+    setScriptSrc('project');
+    document.getElementById('task-name').value=name+' 回归任务';
+    document.getElementById('task-desc').value='由录制项目「'+name+'」创建的测试任务';
+    toast('已从项目创建任务','脚本来源预选 · '+name);
+  }
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeProj();closeProjModal();closeConfirm();}});
+
+
+  // ========== 测试任务：编辑入口 ==========
+  function editTaskRow(el){
+    let name='测试任务';
+    if(el&&el.closest){const tr=el.closest('tr');if(tr)name=tr.getAttribute('data-row')||name;}
+    go('page-task-create'); wizStep=1; wizRender();
+    document.getElementById('task-name').value=name;
+    document.getElementById('task-desc').value='编辑任务：'+name;
+    toast('已载入任务配置进行编辑', name);
+  }
+
+
+  // ========== 测试计划：编辑/删除确认 ==========
+  let confirmType='proj';
+  function editPlan(name){
+    const t=document.getElementById('plan-modal-title'); if(t)t.textContent='编辑计划 · '+name;
+    const nm=document.getElementById('pl-name'); if(nm)nm.value=name;
+    document.getElementById('plan-modal-mask').classList.add('show');
+    document.getElementById('plan-modal').classList.add('show');
+  }
+  function confirmDelPlan(name){
+    confirmType='plan';
+    document.getElementById('confirm-title').textContent='确认删除计划';
+    document.getElementById('confirm-target').textContent=name;
+    document.getElementById('confirm-mask').classList.add('show');
+    document.getElementById('confirm-modal').classList.add('show');
+  }
+  function confirmOk(){
+    closeConfirm();
+    if(confirmType==='plan')toast('已删除计划','含任务编排与历史报告');
+    else if(confirmType==='proj')toast('已删除项目','含关联任务与历史');
+    else if(confirmType==='stop')toast('已停止执行','任务已终止，已产生数据保留');
+    else toast('删除完成');
+    confirmType='proj';
+  }
+
+
+  // ========== 报告详情：导出进度反馈 ==========
+  function exportReport(btn,fmt){
+    btn.disabled=true; const old=btn.textContent; btn.textContent='导出中…';
+    const bar=document.getElementById('export-bar');
+    bar.classList.add('show'); bar.querySelector('.bar i').style.width='0%';
+    document.getElementById('export-pct').textContent='0%';
+    let w=0;
+    const t=setInterval(()=>{
+      w+=18; const nw=Math.min(w,100);
+      bar.querySelector('.bar i').style.width=nw+'%';
+      document.getElementById('export-pct').textContent=nw+'%';
+      if(nw>=100){
+        clearInterval(t);
+        setTimeout(()=>{
+          bar.classList.remove('show'); btn.disabled=false; btn.textContent=old;
+          toast('已导出 '+fmt+' 报告','report_20260829_001.'+fmt.toLowerCase());
+        },300);
+      }
+    },180);
+  }
+
+
+  // ========== 执行监控：停止确认 ==========
+  function confirmStop(){
+    confirmType='stop';
+    document.getElementById('confirm-title').textContent='确认停止执行';
+    document.getElementById('confirm-target').textContent='登录测试 · 迭代 3/20';
+    document.getElementById('confirm-mask').classList.add('show');
+    document.getElementById('confirm-modal').classList.add('show');
+  }
+  // ========== 交互调试：单步执行反馈 ==========
+  function runDbg(btn){
+    const step=btn.closest('.dbg-step');
+    const st=step.querySelector('.st');
+    btn.disabled=true; const old=btn.textContent; btn.textContent='执行中…';
+    setTimeout(()=>{
+      btn.disabled=false; btn.textContent=old;
+      const ok=Math.random()>0.3;
+      st.textContent=ok?'✓ 通过':'✕ 失败';
+      st.style.color=ok?'var(--success)':'var(--danger)';
+    },900);
+  }
+  // ========== 顶栏搜索联动 ==========
+  function globalSearch(){
+    const v=document.getElementById('global-search').value.trim().toLowerCase();
+    if(!v)return;
+    const map={计划:'page-plans',报告:'page-reports',报告详情:'page-report',任务:'page-dashboard',项目:'page-projects',录制:'page-create',调试:'page-debug',新建:'page-task-create',监控:'page-exec'};
+    for(const k in map){ if(v.indexOf(k)>=0){ go(map[k]); toast('已跳转到'+k+'模块', v); return; } }
+    toast('未匹配到模块','试试：任务 / 计划 / 报告 / 项目');
+  }
+
+</script>
+</body>
+</html>

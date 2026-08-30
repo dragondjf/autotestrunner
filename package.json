@@ -1,0 +1,25 @@
+{
+  "name": "brickcore-node-backend",
+  "private": true,
+  "version": "1.0.0",
+  "description": "BrickCore Node.js/TypeScript backend (1:1 refactor of agent_web_ui + smartbrowser + brick_runner_http)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:web-ui": "pnpm --filter @brickcore/web-ui dev",
+    "dev:runner": "pnpm --filter @brickcore/runner dev",
+    "start:web-ui": "pnpm --filter @brickcore/web-ui start",
+    "start:runner": "pnpm --filter @brickcore/runner start",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "install:playwright": "pnpm --filter @brickcore/smartbrowser exec playwright install chromium"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9"
+  }
+}

@@ -1,0 +1,31 @@
+  :root {
+    --primary: #107dec;
+    --primary-soft: #e3f0ff;
+    --bg: #f1f1f1;
+    --panel: #ffffff;
+    --border: #e6e6e6;
+    --text: #2a2a2a;
+    --muted: #8a8a8a;
+    --ok: #2ea44f;
+    --err: #e5484d;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); font-size: 13px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .app { display: flex; flex: 1; min-height: 140px; }
+
+  /* ============ 可拖拽分割线 ============ */
+  .vdivider {
+    flex: 0 0 6px; width: 6px; cursor: col-resize;
+    background: transparent; position: relative; z-index: 5;
+    transition: background .15s;
+  }
+  .vdivider:hover, .vdivider.active { background: var(--primary); }
+  body.resizing { user-select: none; cursor: col-resize; }
+  body.resizing .vdivider { background: var(--primary); }

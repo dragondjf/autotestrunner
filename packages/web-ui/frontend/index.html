@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SmartBrowser Agent · 观测台</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldgutter.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/dracula.min.css" />
+<link rel="stylesheet" href="/assets/css/base.css" />
+<link rel="stylesheet" href="/assets/css/chat.css" />
+<link rel="stylesheet" href="/assets/css/exec.css" />
+<link rel="stylesheet" href="/assets/css/config.css" />
+<link rel="stylesheet" href="/assets/css/code-panel.css" />
+<link rel="stylesheet" href="/assets/css/debugger.css" />
+</head>
+<body>
+<div class="app">
+  <!-- 左列: 会话列表 -->
+  <aside class="sessions-pane" id="sessions-pane">
+    <div class="sess-head">
+      <h2>会话</h2>
+      <button class="btn" id="btn-sess-new" onclick="newSession()">＋ 新建</button>
+    </div>
+    <div class="sess-list" id="sess-list">
+      <div class="empty">暂无历史会话</div>
+    </div>
+  </aside>
+
+  <!-- 左栏 / 中列 分隔线（可拖拽） -->
+  <div class="vdivider" data-dir="left" title="拖拽调整左栏宽度"></div>
+
+  <!-- 中列: 对话 -->
+  <aside class="chat-pane">
+    <header class="chat-head">
+      <h1>SmartBrowser Agent</h1>
+      <span class="badge" id="status-badge">待命</span>
+      <button class="cfg-trigger" title="AutoTest 管理台（项目/任务/计划/报告）" onclick="location.href='/app'">📊 管理台</button>
+      <button class="cfg-trigger" title="平台配置 / LLM 模型配置" onclick="openCfg()">⚙ 配置</button>
+    </header>
+    <div class="msgs" id="msgs">
+      <div class="msg agent"><div class="m">Assist</div>在下方输入需求，我将通过浏览器 Agent 逐步执行，并在右侧实时展示每一步的“步骤描述 + 执行指令 + 截图”。</div>
+    </div>
+    <div class="composer">
+      <input id="start-url" placeholder="起始地址 (URL)" value="http://localhost:8000/#/login" />
+      <div class="input-wrap">
+        <textarea id="user-req" placeholder="例如：在登录页输入 admin / admin123 登录并进入管理界面"></textarea>
+        <button class="btn-send" id="btn-run" onclick="run()" title="发送 (Enter)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 中列 / 右列 分隔线（可拖拽） -->
+  <div class="vdivider" data-dir="right" title="拖拽调整右栏宽度"></div>
+
+  <!-- 右列: 执行观测 -->
+  <main class="exec-pane">
+    <div class="exec-toolbar">
+      <div class="seg">
+        <button id="mode-timeline" class="active" onclick="setMode('timeline')">时间线</button>
+        <button id="mode-board" onclick="setMode('board')">工作台</button>
+        <button id="mode-code" onclick="setMode('code')">代码</button>
+      </div>
+      <div class="stats" id="stats">已执行 <b>0</b> 步</div>
+    </div>
+    <div class="exec-body" id="exec-body">
+      <div class="steps" id="steps">
+        <div class="empty">尚无执行记录。<br/>发起一次 Agent 执行后，这里会实时出现每一步。</div>
+      </div>
+      <!-- 页面调试器入口(F12 式) -->
+      <div class="dbg-entry">
+        <button id="dbg-toggle-btn" class="dbg-entry-btn" onclick="toggleDebugger()" disabled
+                title="先发起一次 Agent 执行，建立浏览器会话后可用">🛠 调试器</button>
+      </div>
+    </div>
+    <!-- ========== 代码面板 ========== -->
+    <div class="code-panel" id="code-panel" style="display:none;">
+      <!-- 顶部工具条 -->
+      <div class="code-toolbar">
+        <div class="code-tb-left">
+          <select id="code-lang" class="code-lang-select" onchange="onCodeLangChange()" title="选择脚本语言">
+            <option value="js">JavaScript</option>
+            <option value="py">Python</option>
+            <option value="json">JSON</option>
+          </select>
+          <button class="code-btn" id="code-refresh-btn" onclick="codeRefresh()" title="从当前步骤自动生成脚本">🔄 刷新</button>
+          <button class="code-btn" onclick="codeCopy()" title="复制代码到剪贴板">📋 复制</button>
+        </div>
+        <div class="code-tb-right">
+          <button class="code-btn" onclick="codeSave()" title="保存脚本文件">💾 保存</button>
+          <button class="code-btn run" id="code-run-btn" onclick="codeRun()" title="运行脚本">▶ 运行</button>
+          <button class="code-btn" onclick="openCodeSettings()" title="运行设置">⚙ 设置</button>
+          <div class="code-export-wrap">
+            <button class="code-btn" onclick="toggleExportMenu()" title="导出">📤 导出 ▾</button>
+            <div class="code-export-menu" id="code-export-menu">
+              <div onclick="codeExport('json')">导出 JSON</div>
+              <div onclick="codeExport('py')">导出 Python</div>
+              <div onclick="codeExport('js')">导出 JavaScript</div>
+            </div>
+          </div>
+        </div>
+        <span class="code-status" id="code-status"></span>
+      </div>
+      <!-- 代码编辑器 -->
+      <div class="code-editor-wrap" id="code-editor-wrap">
+        <textarea id="code-editor-src" style="display:none;" placeholder="// Playwright 脚本将在此显示&#10;// 点击「刷新」从当前执行步骤自动生成&#10;// 或手动编辑代码后点击「运行」"></textarea>
+      </div>
+      <!-- 可拖拽分隔线 -->
+      <div class="code-splitter" id="code-splitter" title="拖拽调整大小"></div>
+      <!-- 调试日志 -->
+      <div class="code-debug" id="code-debug">
+        <div class="code-debug-header">
+          <span>🔍 调试日志</span>
+          <div class="ctrl">
+            <button onclick="copyLog()" title="复制日志">📋 复制</button>
+            <button onclick="downloadLog()" title="下载日志文件">📥 下载</button>
+            <button onclick="sendLogToInput()" title="发送到输入框">📨 发送</button>
+            <button onclick="clearDebugLog()" class="danger" title="清空日志">🗑 清空</button>
+          </div>
+        </div>
+        <div class="code-debug-body" id="code-debug-body">
+          <div class="code-debug-empty">点击「运行」执行脚本，日志将显示在此处</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- 截图大图预览 -->
+<div class="viewer" id="viewer">
+  <div class="close" onclick="closeViewer()">&times;</div>
+  <img id="viewer-img" alt="" />
+  <div class="cap" id="viewer-cap"></div>
+  <div class="nav">
+    <button class="btn ghost" id="btn-prev" onclick="prevShot()">◀ 上一步</button>
+    <button class="btn ghost" id="btn-next" onclick="nextShot()">下一步 ▶</button>
+  </div>
+</div>
+
+<!-- 实时视图全屏（独立，不与时间线 viewer 共用） -->
+<div class="dbg-live-fs" id="dbg-live-fs">
+  <div class="close" onclick="dbgLiveCloseFs()">&times;</div>
+  <img id="dbg-live-fs-img" alt="" />
+  <div class="dbg-live-fs-bar" id="dbg-live-fs-bar"></div>
+</div>
+
+<!-- ============ 页面调试器 (F12 式, 零 LLM 直操作会话 Playwright 实例) ============ -->
+<div class="dbg" id="dbg">
+  <div class="dbg-resizer" id="dbg-resizer" title="拖拽调整高度"></div>
+  <div class="dbg-panel">
+    <div class="dbg-tabs">
+      <button class="dbg-tab active" id="dbg-tab-elements" onclick="dbgSwitchTab('elements')">🎯 Elements</button>
+      <button class="dbg-tab" id="dbg-tab-locator" onclick="dbgSwitchTab('locator')">📍 Locator</button>
+      <button class="dbg-tab" id="dbg-tab-snapshot" onclick="dbgSwitchTab('snapshot')">🖼 Snapshot</button>
+      <button class="dbg-tab" id="dbg-tab-actions" onclick="dbgSwitchTab('actions')">⚡ Actions</button>
+      <button class="dbg-tab" id="dbg-tab-console" onclick="dbgSwitchTab('console')">💻 Console</button>
+      <div class="dbg-tabs-right">
+        <span class="dbg-url" id="dbg-url"></span>
+        <button class="dbg-icon" onclick="dbgToggleMax()" id="dbg-max-btn" title="最大化/还原">▣</button>
+        <button class="dbg-icon" onclick="dbgClose()" title="关闭 (Esc)">✕</button>
+      </div>
+    </div>
+    <div class="dbg-body">
+      <div class="dbg-panes">
+      <!-- Elements 元素 -->
+      <div class="dbg-pane active" id="dbg-pane-elements">
+        <div class="dbg-toolbar">
+          <button class="dbg-btn warn" id="dbg-pick-btn" onclick="dbgPickToggle()">🎯 点选元素</button>
+          <input id="dbg-el-filter" class="dbg-input grow" placeholder="过滤: tag / 文本 / 定位器" oninput="dbgRenderElements()"/>
+          <span class="dbg-hint" id="dbg-el-count"></span>
+          <button class="dbg-btn" onclick="dbgLoadElements()">🔄 刷新</button>
+        </div>
+        <div class="dbg-banner" id="dbg-pick-banner" hidden>🎯 点选模式已激活：在浏览器窗口中 hover 预览蓝框，<b>点击</b>选中元素（红框），可连续点选 · <a href="javascript:void(0)" onclick="dbgPickToggle()">退出点选</a></div>
+        <div class="dbg-scroll">
+          <table class="dbg-table">
+            <thead><tr><th style="width:36px">#</th><th style="width:96px">tag</th><th>文本</th><th>定位器（最优）</th><th style="width:112px">操作</th></tr></thead>
+            <tbody id="dbg-el-tbody"><tr><td colspan="5" class="dbg-td-empty">点击「刷新」加载当前页面的可交互元素</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Locator 定位 -->
+      <div class="dbg-pane" id="dbg-pane-locator">
+        <div class="dbg-toolbar">
+          <input id="dbg-loc-input" class="dbg-input grow" placeholder="定位器: css=.login-btn / get_by_role=button, 登录 / text=提交 / get_by_text=确定" onkeydown="if(event.key==='Enter')dbgProbe()"/>
+          <button class="dbg-btn" onclick="dbgProbe()">🔍 探测</button>
+          <button class="dbg-btn" onclick="dbgHighlight()">✨ 高亮</button>
+          <select id="dbg-loc-history" class="dbg-input" title="最近使用" onchange="if(this.value){document.getElementById('dbg-loc-input').value=this.value;}">
+            <option value="">最近…</option>
+          </select>
+        </div>
+        <div class="dbg-scroll" id="dbg-loc-result"><div class="dbg-empty">输入定位器后「探测」验证匹配数量与可见性；「高亮」在页面上描红框并返回标注截图</div></div>
+      </div>
+      <!-- Snapshot 快照 -->
+      <div class="dbg-pane" id="dbg-pane-snapshot">
+        <div class="dbg-toolbar">
+          <button class="dbg-btn" onclick="dbgScreenshot(false)">📷 视口截图</button>
+          <button class="dbg-btn" onclick="dbgScreenshot(true)">📄 全页截图</button>
+          <button class="dbg-btn" onclick="dbgAria()">🌲 Aria 树</button>
+          <button class="dbg-btn" onclick="dbgPageInfo()">ℹ️ 页面信息</button>
+        </div>
+        <div class="dbg-scroll" id="dbg-snap-result"><div class="dbg-empty">截图可放大 / 下载 / 插入时间线；Aria 树即 LLM 看到的页面语义结构</div></div>
+      </div>
+      <!-- Actions 操作 -->
+      <div class="dbg-pane" id="dbg-pane-actions">
+        <div class="dbg-toolbar">
+          <button class="dbg-btn" onclick="dbgNav('back')">← 后退</button>
+          <button class="dbg-btn" onclick="dbgNav('forward')">→ 前进</button>
+          <button class="dbg-btn" onclick="dbgNav('reload')">⟳ 刷新</button>
+          <input id="dbg-goto-url" class="dbg-input" style="width:200px" placeholder="URL 直达" onkeydown="if(event.key==='Enter')dbgGoto()"/>
+          <button class="dbg-btn" onclick="dbgGoto()">前往</button>
+          <span class="dbg-sep"></span>
+          <button class="dbg-btn" onclick="dbgScroll('top')">⤒ 回顶</button>
+          <button class="dbg-btn" onclick="dbgScroll('down')">↓ 滚一屏</button>
+          <button class="dbg-btn" onclick="dbgScroll('bottom')">⤓ 到底</button>
+        </div>
+        <div class="dbg-toolbar">
+          <select id="dbg-step-method" class="dbg-input">
+            <option value="click_ele">click_ele（点击）</option>
+            <option value="double_click_ele">double_click_ele（双击）</option>
+            <option value="fill_value">fill_value（填充输入）</option>
+            <option value="type_value">type_value（逐字输入）</option>
+            <option value="clear_value">clear_value（清空输入）</option>
+            <option value="hover">hover（悬停）</option>
+            <option value="select_option">select_option（选下拉）</option>
+            <option value="press_key">press_key（按键）</option>
+            <option value="click_by_text">click_by_text（按文本点击）</option>
+            <option value="scroll_to_height">scroll_to_height（滚动到高度）</option>
+            <option value="scroll_to_element">scroll_to_element（滚动到元素）</option>
+            <option value="open_url">open_url（打开 URL）</option>
+            <option value="refresh">refresh（刷新）</option>
+            <option value="go_back">go_back（后退）</option>
+            <option value="wait_for_time">wait_for_time（等待秒数）</option>
+            <option value="wait_for_element">wait_for_element（等元素出现）</option>
+            <option value="wait_for_load">wait_for_load（等加载）</option>
+            <option value="wait_for_element_hidden">wait_for_element_hidden（等元素消失）</option>
+            <option value="wait_for_url_contains">wait_for_url_contains（等 URL 包含）</option>
+            <option value="execute_script">execute_script（执行 JS）</option>
+          </select>
+          <input id="dbg-step-locator" class="dbg-input grow" placeholder="locator（如 get_by_role=button, 登录）"/>
+          <input id="dbg-step-value" class="dbg-input" style="width:170px" placeholder="value / 键名 / URL"/>
+          <button class="dbg-btn run" onclick="dbgRunStep()">▶ 执行单步</button>
+        </div>
+        <div class="dbg-scroll dbg-log" id="dbg-actions-log"><div class="dbg-empty">手动单步直接复用 smartbrowser 执行器（含全部兜底逻辑），完全绕过 LLM；导航/滚动无需定位器</div></div>
+      </div>
+      <!-- Console 控制台 -->
+      <div class="dbg-pane" id="dbg-pane-console">
+        <div class="dbg-scroll dbg-log" id="dbg-console-out"><div class="dbg-empty">在目标页面上下文执行 JS：输入表达式后按 Enter（↑↓ 翻历史）</div></div>
+        <div class="dbg-toolbar">
+          <input id="dbg-js-input" class="dbg-input grow" placeholder="JS 表达式，如 document.title / location.href / (() => document.querySelectorAll('button').length)()" onkeydown="dbgConsoleKeydown(event)"/>
+          <button class="dbg-btn run" onclick="dbgEval()">▶ 运行</button>
+        </div>
+      </div>
+      </div>
+      <!-- 右侧：实时视图 -->
+      <div class="dbg-live" id="dbg-live">
+        <div class="dbg-live-toolbar">
+          <span class="dbg-live-dot" id="dbg-live-dot"></span>
+          <span>实时视图</span>
+          <span class="grow"></span>
+          <button class="dbg-btn" onclick="dbgLiveToggle()" id="dbg-live-toggle-btn" title="暂停/继续刷新">⏸ 暂停</button>
+          <button class="dbg-btn" onclick="dbgLiveFullscreen()" title="全屏实时视图">⛶ 全屏</button>
+        </div>
+        <div class="dbg-live-shot" id="dbg-live-shot">
+          <div class="dbg-live-empty" id="dbg-live-empty">暂无会话<br/>发起 Agent 执行后实时显示浏览器截图</div>
+          <img id="dbg-live-img" alt="实时截图" style="display:none;cursor:crosshair" title="移动预览元素 · 单击真实执行"/>
+        </div>
+        <div class="dbg-live-info" id="dbg-live-info"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 平台配置面板 ============ -->
+<div class="cfg-mask" id="cfg-mask" onclick="if(event.target===this) closeCfg()">
+  <div class="cfg-panel">
+    <div class="cfg-title">
+      <h2>平台配置</h2>
+      <span class="cfg-close" onclick="closeCfg()">&times;</span>
+    </div>
+    <div class="cfg-tabs" id="cfg-tabs">
+      <button class="cfg-tab active" data-tab="llm">LLM 模型配置<span class="cnt" id="cnt-llm"></span></button>
+      <button class="cfg-tab" data-tab="prompt">提示词模板<span class="cnt" id="cnt-prompt"></span></button>
+    </div>
+    <div class="cfg-body">
+      <div class="cfg-toolbar">
+        <button class="btn" id="btn-cfg-add" onclick="openForm(null)">+ 新增配置</button>
+        <label class="search"><input id="cfg-search" placeholder="搜索名称 / 模型" oninput="renderCfgTable()" /></label>
+      </div>
+      <table class="cfg-table">
+        <thead>
+          <tr>
+            <th>配置名称</th>
+            <th>供应商</th>
+            <th>模型</th>
+            <th>API Key</th>
+            <th>温度</th>
+            <th>思考</th>
+            <th>默认</th>
+            <th>启用</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="cfg-tbody"></tbody>
+      </table>
+      <div class="cfg-pager" id="cfg-pager"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 配置编辑表单 ============ -->
+<div class="cfg-form" id="cfg-form">
+  <div class="cfg-form-card">
+    <div class="cfg-form-head">
+      <h3 id="cfg-form-title">新增配置</h3>
+      <span class="cfg-close" onclick="closeForm()">&times;</span>
+    </div>
+    <div class="cfg-form-body">
+      <div class="fld"><label>配置名称</label><input id="f-name" placeholder="例如：DeepSeek 默认" /></div>
+      <div class="fld-row">
+        <div class="fld"><label>供应商</label>
+          <select id="f-provider">
+            <option value="通义千问">通义千问</option>
+            <option value="DeepSeek">DeepSeek</option>
+            <option value="智谱">智谱</option>
+            <option value="月之暗面">月之暗面</option>
+            <option value="OpenAI">OpenAI</option>
+            <option value="自定义">自定义</option>
+          </select>
+        </div>
+        <div class="fld"><label>模型</label><input id="f-model" placeholder="例如 deepseek-chat" /></div>
+      </div>
+      <div class="fld"><label>API Key</label><input id="f-akey" placeholder="sk-..." type="password" /></div>
+      <div class="fld"><label>Base URL（可选）</label><input id="f-base" placeholder="https://api.openai.com/v1" /></div>
+      <div class="fld-row">
+        <div class="fld"><label>思考模式</label>
+          <select id="f-thinking"><option value="auto">跟随前端</option><option value="off">关闭</option><option value="on">开启</option></select>
+        </div>
+        <div class="fld"><label>温度</label><input id="f-temp" type="number" min="0" max="2" step="0.1" value="0.7" /></div>
+      </div>
+      <div class="fld-row">
+        <div class="fld"><label>最大 Token</label><input id="f-maxtokens" type="number" min="1" value="4096" /></div>
+        <div class="fld"><label>超时(s)</label><input id="f-timeout" type="number" min="1" value="60" /></div>
+      </div>
+      <div class="fld-inline"><label class="sw"><input id="f-default" type="checkbox" /><span class="sl"></span></label><label for="f-default">设为默认模型</label></div>
+      <div class="fld-inline"><label class="sw"><input id="f-enabled" type="checkbox" checked /><span class="sl"></span></label><label for="f-enabled">启用该配置</label></div>
+      <div class="cfg-msg" id="cfg-form-msg"></div>
+    </div>
+    <div class="cfg-form-foot">
+      <button class="btn ghost" onclick="closeForm()">取消</button>
+      <button class="btn" onclick="saveForm()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- CodeMirror CDN 必须在 inline script 之前加载 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldgutter.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/brace-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/indent-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/comment-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/comment/comment.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/python/python.min.js"></script>
+<script src="/code-generator.js"></script>
+
+<script src="/assets/js/chat.js"></script>
+<script src="/assets/js/config.js"></script>
+<script src="/assets/js/splitters.js"></script>
+<script src="/assets/js/code-panel.js"></script>
+<script src="/assets/js/debugger.js"></script>
+<script src="/assets/js/debugger-panels.js"></script>
+<script src="/assets/js/live-view.js"></script>
+<script src="/assets/js/bootstrap.js"></script>
+</body>
+</html>

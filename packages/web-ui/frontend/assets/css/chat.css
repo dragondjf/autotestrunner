@@ -1,0 +1,92 @@
+  /* ============ 中列 对话（弹性） ============ */
+  .chat-pane {
+    flex: 1; min-width: 380px; display: flex; flex-direction: column;
+    background: var(--panel); border-right: 1px solid var(--border);
+  }
+  .chat-head {
+    display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .chat-head h1 { font-size: 15px; font-weight: 600; }
+  .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--primary-soft); color: var(--primary);
+  }
+  .badge.running { background: #fff4e0; color: #c07a00; animation: pulse 1s infinite; }
+  .badge.done { background: #e6f7ec; color: var(--ok); }
+  .msgs { flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 88%; padding: 10px 14px; border-radius: var(--radius); line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 2px; }
+  .msg.agent { align-self: flex-start; background: var(--primary-soft); color: var(--text); border-bottom-left-radius: 2px; }
+  .msg.agent .m { font-weight: 600; font-size: 11px; color: var(--primary); margin-bottom: 4px; }
+  .msg.agent.err { background: #fdecec; }
+  .msg.agent.err .m { color: var(--err); }
+  .cursor { display: inline-block; width: 7px; height: 14px; background: var(--primary); animation: blink 0.7s infinite; vertical-align: middle; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.55} }
+
+  .composer {
+    border-top: 1px solid var(--border);
+    padding: 12px 16px 20px;
+    display: flex; flex-direction: column; gap: 10px;
+    max-width: 860px; margin: 0 auto; width: 100%;
+  }
+  .composer input#start-url {
+    width: 100%; border: 1px solid var(--border); border-radius: 12px;
+    padding: 8px 14px; font-size: 13px; font-family: inherit; outline: none;
+    background: #f5f5f5; color: var(--text);
+    transition: border-color .2s, box-shadow .2s, background .2s;
+  }
+  .composer input#start-url:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(80,120,255,.12); }
+  .input-wrap { position: relative; }
+  .input-wrap textarea {
+    width: 100%; border: 1px solid transparent; border-radius: 24px;
+    padding: 14px 52px 14px 18px; font-size: 14px; font-family: inherit; outline: none;
+    background: #f5f5f5; color: var(--text); resize: none;
+    min-height: 56px; max-height: 200px; line-height: 1.5;
+    transition: border-color .2s, box-shadow .2s, background .2s;
+  }
+  .input-wrap textarea:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(80,120,255,.12); }
+  .btn-send {
+    position: absolute; bottom: 8px; right: 8px;
+    width: 36px; height: 36px; border-radius: 50%;
+    border: none; background: var(--primary); color: #fff;
+    cursor: pointer; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    transition: opacity .15s, transform .15s, background .2s;
+  }
+  .btn-send:hover { opacity: .9; transform: scale(1.05); }
+  .btn-send:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+  .btn-send.stop { background: var(--err); }
+  .btn {
+    border: none; border-radius: var(--radius); padding: 9px 18px; cursor: pointer;
+    font-size: 13px; font-weight: 500; transition: opacity .15s; color: #fff; background: var(--primary);
+  }
+  .btn:hover { opacity: .88; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  /* ============ 左列 会话列表（固定侧边栏） ============ */
+  .sessions-pane {
+    flex: 0 0 260px; width: 260px; min-width: 220px;
+    display: flex; flex-direction: column;
+    background: var(--panel); border-right: 1px solid var(--border);
+  }
+  .sess-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .sess-head h2 { font-size: 13px; font-weight: 600; }
+  .sess-head .btn { padding: 6px 10px; font-size: 12px; }
+  .sess-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+  .sess-list .empty { padding: 40px 16px; font-size: 12px; }
+  .sess-item {
+    position: relative; padding: 9px 10px; border-radius: var(--radius);
+    cursor: pointer; border: 1px solid transparent; transition: all .15s;
+  }
+  .sess-item:hover { background: #f7f9fc; }
+  .sess-item.active { background: var(--primary-soft); border-color: var(--primary); }
+  .sess-item .t { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 16px; }
+  .sess-item .meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .sess-item .meta .cnt { margin-left: 4px; }
+  .sess-item .del {
+    position: absolute; top: 8px; right: 8px; border: none; background: transparent;
+    color: var(--muted); font-size: 14px; line-height: 1; cursor: pointer; padding: 2px 4px; border-radius: 4px; opacity: 0; transition: opacity .15s;
+  }
+  .sess-item:hover .del { opacity: 1; }
+  .sess-item .del:hover { color: var(--err); background: #fdecec; }
