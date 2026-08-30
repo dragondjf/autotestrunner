@@ -1,5 +1,5 @@
 /**
- * web-ui 服务入口（端口 PORT，默认 8080）。
+ * web-ui 服务入口（端口 PORT，默认 25000；HOST 默认 0.0.0.0）。
  * 对齐 core.py 的 lifespan：启动空闲会话回收后台任务；应用关闭时回收所有会话。
  */
 import { createApp } from "./app.js";
@@ -15,7 +15,7 @@ import { startRetentionScheduler, stopRetentionScheduler } from "./services/rete
 import { stopAllExecutions } from "./services/runner-client.js";
 import { recoverInterruptedRuns } from "./services/recovery.js";
 
-const PORT = Number(process.env.PORT ?? 8080);
+const PORT = Number(process.env.PORT ?? 25000);
 const HOST = process.env.HOST ?? "0.0.0.0";
 
 export async function startServer(port = PORT, host = HOST): Promise<{ port: number; close: () => Promise<void> }> {
@@ -26,7 +26,7 @@ export async function startServer(port = PORT, host = HOST): Promise<{ port: num
 
   const app = createApp();
   const server = app.listen(port, host, () => {
-    logger.info("[server] SmartBrowser Agent Web UI 启动: http://%s:%s", host, String(port));
+    logger.info("[server] AutoTest Runner 已启动: http://%s:%s （管理台 /app）", host, String(port));
   });
 
   // 每 30 秒回收空闲会话（对齐 _gc_sessions）；inspect 会话每 60 秒回收（B2 空闲超时）
