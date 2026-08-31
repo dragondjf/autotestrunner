@@ -458,12 +458,14 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
       // 3) 用户操作/激活的 tab → 监控跟随（操作优先；无操作时按页面焦点）
       const targetPage = actPage ?? focusPageFallback(sid, focusElementList);
       if (targetPage && targetPage !== explorer.page) {
-        // 焦点切换冷静期：用户操作/新页切换后 4s 内不因焦点抖动再切换（防执行成功又跳回）
-        if (targetPage !== actPage && Date.now() - (lastFocusSwitchMs.get(sid) ?? 0) < 4000) {
+        // 防振荡：焦点切换需距上次任何切换 6s 以上（用户操作/新页切换不受限且刷新计时）
+        const isFocusOnly = targetPage !== actPage;
+        const sinceLast = Date.now() - (lastSwitchMs.get(sid) ?? 0);
+        if (isFocusOnly && sinceLast < 6000) {
           void targetPage;
         } else {
           explorer.page = targetPage;
-          lastFocusSwitchMs.set(sid, Date.now());
+          lastSwitchMs.set(sid, Date.now());
           const stAct = INSPECT_LIVE_CDP.get(sid);
           if (stAct) stAct["page"] = targetPage;
           notifyInspectPageSwitch(sid);
@@ -499,7 +501,7 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
 
 /** 焦点稳定计数（连续 2 轮 hasFocus 才视为激活 tab） */
 const focusStreak = new Map<string, Map<Page, number>>();
-const lastFocusSwitchMs = new Map<string, number>();
+const lastSwitchMs = new Map<string, number>();
 
 function focusPageFallback(sid: string, focusedPages: Page[]): Page | null {
   const streak = focusStreak.get(sid);
@@ -513,7 +515,7 @@ function focusPageFallback(sid: string, focusedPages: Page[]): Page | null {
   for (const pg of focusedPages) {
     const n = (streak.get(pg) ?? 0) + 1;
     streak.set(pg, n);
-    if (n >= 2) stable = pg;
+    if (n >= 3) stable = pg;
   }
   // 清零未聚焦页计数
   for (const [k] of streak) if (!focusedPages.includes(k)) streak.delete(k);
