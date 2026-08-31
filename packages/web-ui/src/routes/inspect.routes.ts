@@ -368,6 +368,7 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
     const tasks: Promise<void>[] = [];
     const newStepIdx: number[] = [];
     let actPage: Page | null = null; // 本轮用户操作所在页（跟随其激活）
+    let focusPage: Page | null = null; // 本轮获得焦点的页（浏览器标签栏切换 tab）
     for (let ti = 0; ti < knownPages.length; ti++) {
       const pg = knownPages[ti];
       tasks.push(
@@ -375,8 +376,10 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
           const w = window as unknown as { __RECORDED__?: Record<string, unknown>[] };
           const a = w.__RECORDED__ || [];
           w.__RECORDED__ = [];
-          return a;
-        }).then((actions) => {
+          return { actions: a, focused: document.hasFocus() };
+        }).then((r) => {
+          const actions = (r?.actions ?? []) as Record<string, unknown>[];
+          if (r?.focused) focusPage = pg; // 该 tab 为浏览器当前激活页
           const l = INSPECT_LOG.get(sid);
           if (!l) return;
           for (const a of actions ?? []) {
@@ -447,12 +450,13 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
         }
       }
       lastPageCount = pagesNow.length;
-      // 3) 用户操作所在页（切回旧 tab 等）→ 监控跟随该激活页
-      if (actPage && actPage !== explorer.page) {
-        explorer.page = actPage;
+      // 3) 用户操作/激活的 tab → 监控跟随（操作优先；无操作时按页面焦点）
+      const targetPage = actPage ?? focusPage;
+      if (targetPage && targetPage !== explorer.page) {
+        explorer.page = targetPage;
         const stAct = INSPECT_LIVE_CDP.get(sid);
         if (stAct) {
-          stAct["page"] = actPage;
+          stAct["page"] = targetPage;
           stAct["switched"] = true;
         }
       }
