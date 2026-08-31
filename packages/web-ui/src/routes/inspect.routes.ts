@@ -362,27 +362,15 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
     const log = INSPECT_LOG.get(sid);
     if (!log) return; // 会话已关闭
     const pages = explorer.context?.pages() ?? [];
-    // 新标签页检测（用户点击 target=_blank）
-    if (lastPageCount >= 0 && pages.length > lastPageCount) {
-      for (let ti = lastPageCount; ti < pages.length; ti++) {
-        log.push({
-          type: "step",
-          step: log.length + 1,
-          method: "new_page",
-          desc: pages[ti]?.url().slice(0, 80) ?? "新标签页",
-          url: pages[ti]?.url() ?? "",
-          tab_index: ti,
-          error: null,
-          stepType: "user",
-        });
-      }
-      lastUrls.set(pages[pages.length - 1]!, pages[pages.length - 1]!.url());
-    }
-    lastPageCount = pages.length;
-    for (let ti = 0; ti < pages.length; ti++) {
-      const pg = pages[ti];
-      try {
-        void pg.evaluate(() => {
+    const knownPages = lastPageCount >= 0 && lastPageCount <= pages.length ? pages.slice(0, lastPageCount) : pages;
+
+    // 1) 先读各页动作（异步）；全部完成后才做新页检测，保证 click → new_page 时序
+    const tasks: Promise<void>[] = [];
+    const newStepIdx: number[] = [];
+    for (let ti = 0; ti < knownPages.length; ti++) {
+      const pg = knownPages[ti];
+      tasks.push(
+        pg.evaluate(() => {
           const w = window as unknown as { __RECORDED__?: Record<string, unknown>[] };
           const a = w.__RECORDED__ || [];
           w.__RECORDED__ = [];
@@ -401,8 +389,9 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
               error: null,
               stepType: "user",
             });
+            newStepIdx.push(l.length - 1);
           }
-          // 导航检测（每页 url 变化）
+          // 导航检测（每页 url 变化，顺序在动作之后）
           const curr = pg.url();
           const prev = lastUrls.get(pg);
           if (prev !== undefined && prev !== curr) {
@@ -416,15 +405,49 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
               error: null,
               stepType: "user",
             });
+            newStepIdx.push(l.length - 1);
           }
           lastUrls.set(pg, curr);
         }).catch(() => {
           /* 页面关闭/导航中跳过 */
-        });
-      } catch {
-        /* pass */
-      }
+        }),
+      );
     }
+    void Promise.all(tasks).then(() => {
+      const l = INSPECT_LOG.get(sid);
+      if (!l) return;
+      const pagesNow = explorer.context?.pages() ?? [];
+      // 2) 新标签页检测（动作之后：click → new_page）
+      if (lastPageCount >= 0 && pagesNow.length > lastPageCount) {
+        for (let ti = lastPageCount; ti < pagesNow.length; ti++) {
+          l.push({
+            type: "step",
+            step: l.length + 1,
+            method: "new_page",
+            desc: pagesNow[ti]?.url().slice(0, 80) ?? "新标签页",
+            url: pagesNow[ti]?.url() ?? "",
+            tab_index: ti,
+            error: null,
+            stepType: "user",
+          });
+          newStepIdx.push(l.length - 1);
+        }
+        lastUrls.set(pagesNow[pagesNow.length - 1]!, pagesNow[pagesNow.length - 1]!.url());
+      }
+      lastPageCount = pagesNow.length;
+      // 3) 每个新步骤补截图（异步，最多 2 张/轮防阻塞）
+      for (const idx of newStepIdx.slice(0, 2)) {
+        const pg = knownPages[Number(l[idx]?.["tab_index"] ?? 0)] ?? pagesNow[0];
+        if (!pg) continue;
+        void inspectShotB64(pg).then((shot) => {
+          const lg = INSPECT_LOG.get(sid);
+          const s = lg?.[idx];
+          if (s && !s["screenshot"]) s["screenshot"] = shot;
+        }).catch(() => {
+          /* 截图失败忽略 */
+        });
+      }
+    });
   }, 1000);
   void timer;
   INSPECT_USER_TIMERS.set(sid, timer);
@@ -453,9 +476,10 @@ export async function adoptInspectPopup(
     }
     bindInspectPage(sid, explorer, popup);
     INSPECT_LAST_ACTIVE.set(sid, now());
+    // 新标签页即用户当前操作目标：无条件切换（live 帧流跟随激活 tab）
+    if (explorer.page !== popup) explorer.page = popup;
     const st = INSPECT_LIVE_CDP.get(sid);
     if (st && st["page"] !== popup) {
-      explorer.page = popup;
       st["page"] = popup;
       const q = st["queue"] as unknown[] | undefined;
       if (q !== undefined && q.length < 2) q.push({ __switched: true });
