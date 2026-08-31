@@ -497,6 +497,8 @@ const BROWSER_LAUNCH_ARGS = [
   "--disable-web-security",
   "--disable-features=IsolateOrigins,site-per-process",
   "--lang=zh-CN",
+  // 可选 CDP 调试端口（SMARTBROWSER_CDP_PORT>0 时开启，供自动化/调试连接操作浏览器）
+  ...(Number(process.env.SMARTBROWSER_CDP_PORT) > 0 ? [`--remote-debugging-port=${process.env.SMARTBROWSER_CDP_PORT}`] : []),
 ];
 
 /** 默认截图目录：node-backend/static/screenshots/explore（从包位置向上 3 级到 node-backend 项目根） */

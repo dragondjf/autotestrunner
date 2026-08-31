@@ -78,6 +78,7 @@
       InsTimeline.reset();
       InsLocator.sessionReady();
       InsLive.start();
+      startTimelinePoll();   // 用户手动操作实时刷新时间线
       InsTimeline.toast('会话已建立: ' + (d.title || d.url), 'ok');
       setUrlForSid(d.sid);   // URL 深链: /inspect/{sid}
       refreshHistory();
@@ -88,6 +89,21 @@
       el('ins-error-text').textContent = '页面打开失败: ' + (err.message || err);
       el('ins-empty').style.display = 'none';
     });
+  }
+
+  // ---------- 用户手动操作实时时间线轮询（采集脚本 → timeline API） ----------
+  var insPollTimer = null;
+  function startTimelinePoll() {
+    stopTimelinePoll();
+    insPollTimer = setInterval(function () {
+      if (!state.sid || !state.alive) return;
+      actGet('/api/inspect/session/' + state.sid + '/timeline').then(function (d) {
+        if (d.steps && d.steps.length) InsTimeline.load(d.steps, false);
+      }).catch(function () { });
+    }, 2000);
+  }
+  function stopTimelinePoll() {
+    if (insPollTimer) { clearInterval(insPollTimer); insPollTimer = null; }
   }
 
   function endSession() {
@@ -103,6 +119,7 @@
     });
     function afterClose(msg) {
       state.alive = false;
+      stopTimelinePoll();
       InsLive.stop();
       setStatus('未连接', '');
       el('ins-end').disabled = true;

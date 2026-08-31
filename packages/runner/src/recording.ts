@@ -10,7 +10,7 @@
  */
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { settings } from "@brickcore/shared";
-import { buildRecorderScript } from "./recorder-script.js";
+import { buildRecorderScript } from "@brickcore/shared";
 
 const sleep = (s: number): Promise<void> => new Promise((r) => setTimeout(r, s * 1000));
 

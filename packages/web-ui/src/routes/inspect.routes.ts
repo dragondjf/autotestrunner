@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { Router, type Response } from "express";
 import { WebSocketServer, WebSocket } from "ws";
 import type { CDPSession, Page } from "playwright";
-import { Mutex, SSE_HEADERS } from "@brickcore/shared";
+import { Mutex, SSE_HEADERS, buildRecorderScript } from "@brickcore/shared";
 import {
   UiMcpAgentExplorer,
   buildCandidatesFromElement,
@@ -154,6 +154,7 @@ export async function inspectStopCdp(sid: string): Promise<void> {
 
 /** 关闭浏览器 + 落盘。触发点: 手动结束 / 30min 空闲 / 新建替换 / 应用退出。 */
 export async function inspectClose(sid: string, persist = true): Promise<void> {
+  stopInspectUserCapture(sid);
   if (persist) inspectPersist(sid);
   await inspectStopCdp(sid);
   const explorer = INSPECT_SESSIONS.get(sid);
@@ -274,6 +275,12 @@ inspectRouter.post(
     }
     try {
       await explorer._initBrowser();
+      // 用户手动操作采集：注入记录脚本（必须在首次导航前，后续跳转/新 tab 自动生效）
+      try {
+        await explorer.context!.addInitScript(buildRecorderScript());
+      } catch {
+        /* 注入失败不阻塞会话 */
+      }
       await explorer.page!.goto(startUrl, {
         waitUntil: "domcontentloaded",
         timeout: explorer.timeout * 1000,
@@ -292,6 +299,8 @@ inspectRouter.post(
       throw httpError(502, `页面打开失败: ${exc instanceof Error ? exc.message : exc}`);
     }
     bindInspectPage(sid, explorer, explorer.page!);
+    // 用户手动操作采集：轮询各页动作写时间线（点击/输入/跳转/新 tab）
+    startInspectUserCapture(sid, explorer);
     // 弹窗跟随——target=_blank 开新页时自动切换操作目标
     explorer.context!.on("page", (pg: Page) => {
       void adoptInspectPopup(sid, explorer, pg);
@@ -343,6 +352,91 @@ export function bindInspectPage(sid: string, explorer: UiMcpAgentExplorer, page:
   page.on("dialog", (d) => {
     void onDialog(d as unknown as { type: string; message: string; accept: () => Promise<void> });
   });
+}
+
+/** 用户手动操作采集：注入脚本已生效，轮询各页 __RECORDED__ 写时间线（点击/输入/跳转/新 tab） */
+export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplorer): void {
+  const lastUrls = new Map<Page, string>();
+  let lastPageCount = -1;
+  const timer = setInterval(() => {
+    const log = INSPECT_LOG.get(sid);
+    if (!log) return; // 会话已关闭
+    const pages = explorer.context?.pages() ?? [];
+    // 新标签页检测（用户点击 target=_blank）
+    if (lastPageCount >= 0 && pages.length > lastPageCount) {
+      for (let ti = lastPageCount; ti < pages.length; ti++) {
+        log.push({
+          type: "step",
+          step: log.length + 1,
+          method: "new_page",
+          desc: pages[ti]?.url().slice(0, 80) ?? "新标签页",
+          url: pages[ti]?.url() ?? "",
+          tab_index: ti,
+          error: null,
+          stepType: "user",
+        });
+      }
+      lastUrls.set(pages[pages.length - 1]!, pages[pages.length - 1]!.url());
+    }
+    lastPageCount = pages.length;
+    for (let ti = 0; ti < pages.length; ti++) {
+      const pg = pages[ti];
+      try {
+        void pg.evaluate(() => {
+          const w = window as unknown as { __RECORDED__?: Record<string, unknown>[] };
+          const a = w.__RECORDED__ || [];
+          w.__RECORDED__ = [];
+          return a;
+        }).then((actions) => {
+          const l = INSPECT_LOG.get(sid);
+          if (!l) return;
+          for (const a of actions ?? []) {
+            l.push({
+              type: "step",
+              step: l.length + 1,
+              method: String(a["action_type"] ?? "action"),
+              desc: String(a["element_text"] ?? a["value"] ?? "").slice(0, 60),
+              locator: String(a["selector"] ?? ""),
+              tab_index: ti,
+              error: null,
+              stepType: "user",
+            });
+          }
+          // 导航检测（每页 url 变化）
+          const curr = pg.url();
+          const prev = lastUrls.get(pg);
+          if (prev !== undefined && prev !== curr) {
+            l.push({
+              type: "step",
+              step: l.length + 1,
+              method: "navigate",
+              desc: curr.slice(0, 80),
+              url: curr,
+              tab_index: ti,
+              error: null,
+              stepType: "user",
+            });
+          }
+          lastUrls.set(pg, curr);
+        }).catch(() => {
+          /* 页面关闭/导航中跳过 */
+        });
+      } catch {
+        /* pass */
+      }
+    }
+  }, 1000);
+  void timer;
+  INSPECT_USER_TIMERS.set(sid, timer);
+}
+
+export const INSPECT_USER_TIMERS = new Map<string, ReturnType<typeof setInterval>>();
+
+/** 会话关闭时停止采集轮询 */
+export function stopInspectUserCapture(sid: string): void {
+  const t = INSPECT_USER_TIMERS.get(sid);
+  if (t) clearInterval(t);
+  INSPECT_USER_TIMERS.delete(sid);
 }
 
 /** 新标签页自动跟随——切换 explorer.page 并通知帧流重连。 */
