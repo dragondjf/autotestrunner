@@ -31,7 +31,7 @@
     if (cnt) cnt.textContent = steps.length + ' 步';
   }
 
-  function renderCard(s) {
+  function renderCard(s, idx) {
     var box = el('ins-steps');
     var hint = box.querySelector('.ins-hint');
     if (hint) hint.remove();
@@ -39,7 +39,7 @@
     card.className = 'step-card' + (s.warning ? ' warn' : '');
     var st = s.warning ? '<span class="st warn">⚠</span>' : '<span class="st ok">✓</span>';
     card.innerHTML =
-      '<div class="step-head"><span class="idx">' + s.step + '</span>' + st +
+      '<div class="step-head"><span class="idx">' + ((idx === undefined ? steps.indexOf(s) : idx) + 1) + '</span>' + st +
       '<span class="desc" title="' + esc(s.desc) + '">' + esc(s.desc) + '</span>' +
       '<button class="copy" title="复制该步的 Playwright JS 代码">📋</button></div>' +
       (s.warning ? '<div class="warnline" title="' + esc(s.warning) + '">⚠ 页面无变化：可能未点中目标元素</div>' : '') +
@@ -63,7 +63,7 @@
       box.innerHTML = '<div class="ins-hint">' +
         (readOnly ? '该历史会话暂无步骤记录' : '执行的每一步会记录在这里') + '</div>';
     }
-    steps.forEach(renderCard);
+    steps.forEach(function (s, i) { renderCard(s, i); });
     updateBadge();
   }
 
