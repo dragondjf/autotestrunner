@@ -367,6 +367,7 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
     // 1) 先读各页动作（异步）；全部完成后才做新页检测，保证 click → new_page 时序
     const tasks: Promise<void>[] = [];
     const newStepIdx: number[] = [];
+    let actPage: Page | null = null; // 本轮用户操作所在页（跟随其激活）
     for (let ti = 0; ti < knownPages.length; ti++) {
       const pg = knownPages[ti];
       tasks.push(
@@ -390,6 +391,7 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
               stepType: "user",
             });
             newStepIdx.push(l.length - 1);
+            actPage = pg; // 用户操作发生处 → 该页为当前激活 tab
           }
           // 导航检测（每页 url 变化，顺序在动作之后）
           const curr = pg.url();
@@ -445,7 +447,28 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
         }
       }
       lastPageCount = pagesNow.length;
-      // 3) 每个新步骤补截图（异步，最多 2 张/轮防阻塞）
+      // 3) 用户操作所在页（切回旧 tab 等）→ 监控跟随该激活页
+      if (actPage && actPage !== explorer.page) {
+        explorer.page = actPage;
+        const stAct = INSPECT_LIVE_CDP.get(sid);
+        if (stAct) {
+          stAct["page"] = actPage;
+          stAct["switched"] = true;
+        }
+      }
+      // 4) 当前监控页被关闭 → 跟随剩余页（兜底）
+      if (explorer.page && explorer.page.isClosed()) {
+        const last = pagesNow[pagesNow.length - 1];
+        if (last) {
+          explorer.page = last;
+          const stC = INSPECT_LIVE_CDP.get(sid);
+          if (stC) {
+            stC["page"] = last;
+            stC["switched"] = true;
+          }
+        }
+      }
+      // 5) 每个新步骤补截图（异步，最多 2 张/轮防阻塞）
       for (const idx of newStepIdx.slice(0, 2)) {
         const pg = knownPages[Number(l[idx]?.["tab_index"] ?? 0)] ?? pagesNow[0];
         if (!pg) continue;
