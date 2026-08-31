@@ -13,7 +13,7 @@ export function runnerUrl(): string {
 
 /** Backend 对外可达地址（Runner 用它回调本服务；默认本机） */
 export function backendPublicUrl(): string {
-  return (process.env.PUBLIC_BACKEND_URL ?? `http://127.0.0.1:${process.env.PORT ?? 8080}`).replace(/\/+$/, "");
+  return (process.env.PUBLIC_BACKEND_URL ?? `http://127.0.0.1:${process.env.PORT ?? 25000}`).replace(/\/+$/, "");
 }
 
 /** 执行进度回传令牌（X-API-Key，与 Runner env API_KEY 一致） */

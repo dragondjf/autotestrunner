@@ -4,7 +4,7 @@
  * 双鉴权：执行进度 X-API-Key（env API_KEY）；录制/调试 X-Internal-Token（env INTERNAL_API_KEY）。
  * Runner 回调无重试 → 端点幂等且快速返回。
  */
-import { appendFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { Router } from "express";
 import type { Request } from "express";
@@ -128,6 +128,22 @@ internalRouter.post(
       status: paused ? "paused" : "recording",
       actionsCount,
     });
+    // 录制进行中实时落盘动作流（raw_actions 全量覆盖），供前端时间线实时查询
+    const rawActions = Array.isArray(body["raw_actions"]) ? (body["raw_actions"] as unknown[]) : [];
+    if (rawActions.length && !paused) {
+      try {
+        const dir = path.join(RECORD_SESSIONS_DIR, String(id));
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(
+          path.join(dir, "actions.jsonl"),
+          rawActions.map((a) => JSON.stringify(a)).join("\n") + "\n",
+          "utf-8",
+        );
+        updateRecordSession(id, { actionsPath: `record-sessions/${id}/actions.jsonl` });
+      } catch {
+        /* 落盘失败不影响心跳 */
+      }
+    }
     // 心跳超时判定数据：内存记录最后心跳时间（失联扫描由 GC 周期任务执行）
     RECORD_HEARTBEATS.set(id, Date.now());
 
@@ -156,13 +172,15 @@ internalRouter.post(
     const actions = Array.isArray(body["actions"]) ? body["actions"] : [];
     const error = body["error"] !== undefined ? String(body["error"]) : undefined;
 
-    // 动作流落盘（JSONL 镜像）
+    // 动作流落盘（全量覆盖：心跳已实时写入，此处以最终动作为准）
     const dir = path.join(RECORD_SESSIONS_DIR, String(id));
     mkdirSync(dir, { recursive: true });
     const actionsPath = `${dir}/actions.jsonl`;
-    for (const action of actions) {
-      appendFileSync(actionsPath, JSON.stringify(action) + "\n", "utf-8");
-    }
+    writeFileSync(
+      actionsPath,
+      actions.map((a) => JSON.stringify(a)).join("\n") + "\n",
+      "utf-8",
+    );
 
     updateRecordSession(id, {
       status: success ? "completed" : "failed",
