@@ -469,20 +469,20 @@ export async function adoptInspectPopup(
   popup: Page,
 ): Promise<void> {
   try {
-    try {
-      await popup.waitForLoadState("domcontentloaded", { timeout: 10000 });
-    } catch {
-      /* pass */
-    }
-    bindInspectPage(sid, explorer, popup);
-    INSPECT_LAST_ACTIVE.set(sid, now());
-    // 新标签页即用户当前操作目标：无条件切换（live 帧流跟随激活 tab）
+    // 新标签页即用户当前操作目标：立即切换（不等加载完成，避免超时导致不跟随）
     if (explorer.page !== popup) explorer.page = popup;
     const st = INSPECT_LIVE_CDP.get(sid);
     if (st && st["page"] !== popup) {
       st["page"] = popup;
       const q = st["queue"] as unknown[] | undefined;
       if (q !== undefined && q.length < 2) q.push({ __switched: true });
+    }
+    INSPECT_LAST_ACTIVE.set(sid, now());
+    bindInspectPage(sid, explorer, popup);
+    try {
+      await popup.waitForLoadState("domcontentloaded", { timeout: 5000 });
+    } catch {
+      /* 加载等待超时不影响跟随 */
     }
   } catch {
     /* pass */
