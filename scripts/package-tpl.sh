@@ -55,17 +55,27 @@ if exist data\runner.pid (
 
 set "PLAYWRIGHT_BROWSERS_PATH=%~dp0browsers"
 set "WEB_UI_DIR=%~dp0data"
+
+rem ===== 启动 runner（录制/执行采集服务，包内自带；tsx 用根 node_modules） =====
+if not exist data\runner-runner.pid (
+  cd /d %~dp0app
+  powershell -NoProfile -Command "$p = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c','node_modules\.bin\tsx.cmd packages\runner\src\server.ts > ..\data\runner-runner.log 2>&1' -WorkingDirectory (Get-Location).Path -WindowStyle Hidden -PassThru; $p.Id" > ..\data\runner-runner.pid
+  cd /d %~dp0
+)
+
+rem ===== 启动 web-ui =====
 cd /d %~dp0app
 echo 正在启动 ...
 powershell -NoProfile -Command "$p = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c','set PORT=%PORT%&& node_modules\.bin\tsx.cmd packages\web-ui\src\server.ts > ..\data\server.log 2>&1' -WorkingDirectory (Get-Location).Path -WindowStyle Hidden -PassThru; $p.Id" > ..\data\runner.pid
 cd /d %~dp0
 set /p PID=<data\runner.pid
-echo  已启动 (PID %PID%) · 端口 %PORT%
+set /p RPID=<data\runner-runner.pid
+echo  已启动 (WebUI PID %PID% · Runner PID %RPID%) · 端口 %PORT%
 
 rem ===== 自动打开浏览器 =====
 if "%AUTO_OPEN%"=="1" (
   echo  正在打开浏览器 ...
-  timeout /t 3 /nobreak >nul
+  ping -n 4 127.0.0.1 >nul
   start "" "http://127.0.0.1:%PORT%/app"
 )
 BATEOF
@@ -74,11 +84,19 @@ BATEOF
 @echo off
 chcp 65001 >nul
 cd /d %~dp0
-if not exist data\runner.pid ( echo AutoTest Runner 未在运行 & exit /b 0 )
-set /p PID=<data\runner.pid
-taskkill /F /T /PID %PID% >nul 2>&1
-del /q data\runner.pid >nul 2>&1
-echo 已停止 AutoTest Runner (PID %PID%)
+if exist data\runner-runner.pid (
+  set /p RPID=<data\runner-runner.pid
+  taskkill /F /T /PID %RPID% >nul 2>&1
+  del /q data\runner-runner.pid >nul 2>&1
+  echo 已停止 Runner (PID %RPID%)
+)
+if exist data\runner.pid (
+  set /p PID=<data\runner.pid
+  taskkill /F /T /PID %PID% >nul 2>&1
+  del /q data\runner.pid >nul 2>&1
+  echo 已停止 WebUI (PID %PID%)
+)
+if not exist data\runner.pid if not exist data\runner-runner.pid echo AutoTest Runner 未在运行
 BATEOF
 
   cat > "$OUT/start.sh" <<'SHEOF'
@@ -113,11 +131,17 @@ fi
 export PLAYWRIGHT_BROWSERS_PATH="$PWD/browsers"
 export WEB_UI_DIR="$PWD/data"
 export PORT
+
+# 启动 runner（录制/执行采集服务，包内自带；tsx 用根 node_modules）
+if [ ! -f data/runner-runner.pid ] || [ -f data/runner-runner.pid ] && ! kill -0 "$(cat data/runner-runner.pid 2>/dev/null)" 2>/dev/null; then
+  ( cd app && nohup node_modules/.bin/tsx packages/runner/src/server.ts > ../data/runner-runner.log 2>&1 & echo $! > ../data/runner-runner.pid )
+fi
+
 cd app
 nohup node_modules/.bin/tsx packages/web-ui/src/server.ts > ../data/server.log 2>&1 &
 echo $! > ../data/runner.pid
 cd ..
-echo "已启动 (PID $(cat data/runner.pid)) · 端口 $PORT"
+echo "已启动 (WebUI PID $(cat data/runner.pid) · Runner PID $(cat data/runner-runner.pid)) · 端口 $PORT"
 
 if [ "$AUTO_OPEN" = "1" ]; then
   echo "正在打开浏览器 ..."
@@ -130,13 +154,18 @@ SHEOF
   cat > "$OUT/stop.sh" <<'SHEOF'
 #!/usr/bin/env bash
 cd "$(dirname "$0")"
-if [ ! -f data/runner.pid ]; then
-  echo "AutoTest Runner 未在运行"
-  exit 0
+STOPPED=0
+if [ -f data/runner-runner.pid ]; then
+  PID=$(cat data/runner-runner.pid)
+  kill "$PID" 2>/dev/null && { echo "已停止 Runner (PID $PID)"; STOPPED=1; }
+  rm -f data/runner-runner.pid
 fi
-PID=$(cat data/runner.pid)
-kill "$PID" 2>/dev/null && echo "已停止 AutoTest Runner (PID $PID)"
-rm -f data/runner.pid
+if [ -f data/runner.pid ]; then
+  PID=$(cat data/runner.pid)
+  kill "$PID" 2>/dev/null && { echo "已停止 WebUI (PID $PID)"; STOPPED=1; }
+  rm -f data/runner.pid
+fi
+[ "$STOPPED" = "0" ] && echo "AutoTest Runner 未在运行"
 SHEOF
 
   cat > "$OUT/README.txt" <<'TXT'
@@ -147,6 +176,10 @@ AutoTest Runner 绿色包
 启动：Windows 双击 start.bat；Linux/macOS 执行 ./start.sh
 停止：stop.bat / stop.sh
 管理台：http://127.0.0.1:25000/app （启动后自动打开浏览器）
+
+启动即拉起两个服务（无需单独启动）：
+  - WebUI 管理台   :25000
+  - Runner 录制/执行 :8900（浏览器录制、调试采集服务，包内自带）
 
 配置：编辑 application.json 可修改：
   port            服务端口（默认 25000）
