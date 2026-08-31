@@ -433,6 +433,16 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
           newStepIdx.push(l.length - 1);
         }
         lastUrls.set(pagesNow[pagesNow.length - 1]!, pagesNow[pagesNow.length - 1]!.url());
+        // 跟随最新标签页（context.on('page') 事件通道不可靠时兜底切换）
+        const popup = pagesNow[pagesNow.length - 1]!;
+        if (explorer.page !== popup) {
+          explorer.page = popup;
+          const st = INSPECT_LIVE_CDP.get(sid);
+          if (st) {
+            st["page"] = popup;
+            st["switched"] = true; // 立即通知 live 循环（不排队）
+          }
+        }
       }
       lastPageCount = pagesNow.length;
       // 3) 每个新步骤补截图（异步，最多 2 张/轮防阻塞）
@@ -472,10 +482,9 @@ export async function adoptInspectPopup(
     // 新标签页即用户当前操作目标：立即切换（不等加载完成，避免超时导致不跟随）
     if (explorer.page !== popup) explorer.page = popup;
     const st = INSPECT_LIVE_CDP.get(sid);
-    if (st && st["page"] !== popup) {
+    if (st) {
       st["page"] = popup;
-      const q = st["queue"] as unknown[] | undefined;
-      if (q !== undefined && q.length < 2) q.push({ __switched: true });
+      st["switched"] = true; // 立即通知 live 循环（不排队）
     }
     INSPECT_LAST_ACTIVE.set(sid, now());
     bindInspectPage(sid, explorer, popup);
@@ -518,6 +527,13 @@ inspectRouter.get(
     res.flushHeaders?.();
     try {
       while (true) {
+        // 页面切换标志（轮询兜底/adopt 置位）：立即通知前端重连，不被帧队列延迟
+        const stNow = INSPECT_LIVE_CDP.get(sid);
+        if (stNow && stNow["switched"]) {
+          stNow["switched"] = false;
+          res.write("event: pageswitch\ndata: {}\n\n");
+          break;
+        }
         let params: Record<string, unknown>;
         try {
           params = await takeFrame(frames, 25000);
