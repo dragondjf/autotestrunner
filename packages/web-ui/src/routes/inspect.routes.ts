@@ -442,11 +442,9 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
         const popup = pagesNow[pagesNow.length - 1]!;
         if (explorer.page !== popup) {
           explorer.page = popup;
-          const st = INSPECT_LIVE_CDP.get(sid);
-          if (st) {
-            st["page"] = popup;
-            st["switched"] = true; // 立即通知 live 循环（不排队）
-          }
+          const stN = INSPECT_LIVE_CDP.get(sid);
+          if (stN) stN["page"] = popup;
+          notifyInspectPageSwitch(sid);
         }
       }
       lastPageCount = pagesNow.length;
@@ -455,10 +453,8 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
       if (targetPage && targetPage !== explorer.page) {
         explorer.page = targetPage;
         const stAct = INSPECT_LIVE_CDP.get(sid);
-        if (stAct) {
-          stAct["page"] = targetPage;
-          stAct["switched"] = true;
-        }
+        if (stAct) stAct["page"] = targetPage;
+        notifyInspectPageSwitch(sid);
       }
       // 4) 当前监控页被关闭 → 跟随剩余页（兜底）
       if (explorer.page && explorer.page.isClosed()) {
@@ -466,10 +462,8 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
         if (last) {
           explorer.page = last;
           const stC = INSPECT_LIVE_CDP.get(sid);
-          if (stC) {
-            stC["page"] = last;
-            stC["switched"] = true;
-          }
+          if (stC) stC["page"] = last;
+          notifyInspectPageSwitch(sid);
         }
       }
       // 5) 每个新步骤补截图（异步，最多 2 张/轮防阻塞）
@@ -488,6 +482,14 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
   }, 1000);
   void timer;
   INSPECT_USER_TIMERS.set(sid, timer);
+}
+
+/** 页面切换通知：WS 主帧流 + SSE 兜底双通道置位（监控立即重 attach/重连） */
+export function notifyInspectPageSwitch(sid: string): void {
+  const stLive = INSPECT_LIVE_CDP.get(sid);
+  if (stLive) stLive["switched"] = true;
+  const stWs = INSPECT_WS.get(sid);
+  if (stWs) stWs["switched"] = true;
 }
 
 export const INSPECT_USER_TIMERS = new Map<string, ReturnType<typeof setInterval>>();
@@ -509,10 +511,8 @@ export async function adoptInspectPopup(
     // 新标签页即用户当前操作目标：立即切换（不等加载完成，避免超时导致不跟随）
     if (explorer.page !== popup) explorer.page = popup;
     const st = INSPECT_LIVE_CDP.get(sid);
-    if (st) {
-      st["page"] = popup;
-      st["switched"] = true; // 立即通知 live 循环（不排队）
-    }
+    if (st) st["page"] = popup;
+    notifyInspectPageSwitch(sid);
     INSPECT_LAST_ACTIVE.set(sid, now());
     bindInspectPage(sid, explorer, popup);
     try {
@@ -1105,6 +1105,11 @@ async function handleInspectWs(sid: string, explorer: UiMcpAgentExplorer, ws: We
           maxHeight: 1080,
         });
         while (!stopped) {
+          // 页面切换标志（轮询兜底/adopt 置位）→ 立即重 attach 到新页
+          if (st["switched"]) {
+            st["switched"] = false;
+            break;
+          }
           let params: Record<string, unknown>;
           try {
             params = await takeFrame(frames, 30000);
