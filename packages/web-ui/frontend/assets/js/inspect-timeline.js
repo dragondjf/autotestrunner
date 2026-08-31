@@ -196,7 +196,10 @@
     if (vw) vw.addEventListener('wheel', onViewerWheel, { passive: false });
   });
 
+  function count() { return steps.length; }
+
   global.InsTimeline = {
+    count: count,
     addEvent: addEvent,
     load: load,
     reset: reset,

@@ -368,7 +368,14 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
     const tasks: Promise<void>[] = [];
     const newStepIdx: number[] = [];
     let actPage: Page | null = null; // 本轮用户操作所在页（跟随其激活）
-    let focusPage: Page | null = null; // 本轮获得焦点的页（浏览器标签栏切换 tab）
+    let focusElementList: Page[] = []; // 本轮获得焦点的页（浏览器标签栏切换 tab）
+    // 焦点稳定计数（连续 2 轮 hasFocus 才认为该页被激活）+ 切换冷静期（防执行/焦点抖动跳回）
+    if (!focusStreak.has(sid)) focusStreak.set(sid, new Map<Page, number>());
+    const streak = focusStreak.get(sid)!;
+    const clearStreak = (keep: Page | null) => {
+      for (const [k] of streak) if (k !== keep) streak.delete(k);
+    };
+
     for (let ti = 0; ti < knownPages.length; ti++) {
       const pg = knownPages[ti];
       tasks.push(
@@ -379,7 +386,7 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
           return { actions: a, focused: document.hasFocus() };
         }).then((r) => {
           const actions = (r?.actions ?? []) as Record<string, unknown>[];
-          if (r?.focused) focusPage = pg; // 该 tab 为浏览器当前激活页
+          if (r?.focused && focusElementList) focusElementList.push(pg); // 该 tab 为浏览器当前激活页
           const l = INSPECT_LOG.get(sid);
           if (!l) return;
           for (const a of actions ?? []) {
@@ -449,12 +456,18 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
       }
       lastPageCount = pagesNow.length;
       // 3) 用户操作/激活的 tab → 监控跟随（操作优先；无操作时按页面焦点）
-      const targetPage = actPage ?? focusPage;
+      const targetPage = actPage ?? focusPageFallback(sid, focusElementList);
       if (targetPage && targetPage !== explorer.page) {
-        explorer.page = targetPage;
-        const stAct = INSPECT_LIVE_CDP.get(sid);
-        if (stAct) stAct["page"] = targetPage;
-        notifyInspectPageSwitch(sid);
+        // 焦点切换冷静期：用户操作/新页切换后 4s 内不因焦点抖动再切换（防执行成功又跳回）
+        if (targetPage !== actPage && Date.now() - (lastFocusSwitchMs.get(sid) ?? 0) < 4000) {
+          void targetPage;
+        } else {
+          explorer.page = targetPage;
+          lastFocusSwitchMs.set(sid, Date.now());
+          const stAct = INSPECT_LIVE_CDP.get(sid);
+          if (stAct) stAct["page"] = targetPage;
+          notifyInspectPageSwitch(sid);
+        }
       }
       // 4) 当前监控页被关闭 → 跟随剩余页（兜底）
       if (explorer.page && explorer.page.isClosed()) {
@@ -482,6 +495,29 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
   }, 1000);
   void timer;
   INSPECT_USER_TIMERS.set(sid, timer);
+}
+
+/** 焦点稳定计数（连续 2 轮 hasFocus 才视为激活 tab） */
+const focusStreak = new Map<string, Map<Page, number>>();
+const lastFocusSwitchMs = new Map<string, number>();
+
+function focusPageFallback(sid: string, focusedPages: Page[]): Page | null {
+  const streak = focusStreak.get(sid);
+  if (!streak) return null;
+  // 本轮无焦点页（窗口失焦/无确立焦点）→ 清零计数
+  if (!focusedPages.length) {
+    for (const [k] of streak) streak.delete(k);
+    return null;
+  }
+  let stable: Page | null = null;
+  for (const pg of focusedPages) {
+    const n = (streak.get(pg) ?? 0) + 1;
+    streak.set(pg, n);
+    if (n >= 2) stable = pg;
+  }
+  // 清零未聚焦页计数
+  for (const [k] of streak) if (!focusedPages.includes(k)) streak.delete(k);
+  return stable;
 }
 
 /** 页面切换通知：WS 主帧流 + SSE 兜底双通道置位（监控立即重 attach/重连） */

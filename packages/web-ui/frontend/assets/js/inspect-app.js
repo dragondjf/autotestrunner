@@ -93,12 +93,22 @@
 
   // ---------- 用户手动操作实时时间线轮询（采集脚本 → timeline API） ----------
   var insPollTimer = null;
+  var insPollCount = 0;  // 已同步条数（增量追加，避免全量重绘刷新闪烁）
   function startTimelinePoll() {
     stopTimelinePoll();
+    insPollCount = 0;
     insPollTimer = setInterval(function () {
       if (!state.sid || !state.alive) return;
       actGet('/api/inspect/session/' + state.sid + '/timeline').then(function (d) {
-        if (d.steps && d.steps.length) InsTimeline.load(d.steps, false);
+        var list = d.steps || [];
+        var cur = InsTimeline.count();
+        if (list.length === cur) return;                       // 无变化不重绘
+        if (list.length > cur && cur >= insPollCount) {        // 增量追加新步骤
+          for (var i = cur; i < list.length; i++) InsTimeline.addEvent(list[i]);
+        } else {                                               // 重置/变短 → 全量
+          InsTimeline.load(list, false);
+        }
+        insPollCount = list.length;
       }).catch(function () { });
     }, 2000);
   }
