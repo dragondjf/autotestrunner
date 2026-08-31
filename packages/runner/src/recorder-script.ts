@@ -136,13 +136,14 @@ const RECORDER_TEMPLATE = String.raw`(function () {
     if (el.id) cands.push("#" + esc(el.id));
     const role = roleOf(el);
     const name = accessibleName(el);
-    if (role && name) cands.push("get_by_role=" + role + ", " + JSON.stringify(name));
+    // 输入类元素：placeholder / aria-label / name 比 role+name 更精确（has-text 不匹配输入框文本）
     const ph = attr(el, "placeholder");
     if (ph) cands.push("get_by_placeholder=" + JSON.stringify(ph));
-    const nm = attr(el, "name");
-    if (nm) cands.push("css=[name='" + esc(nm) + "']");
     const aria = attr(el, "aria-label");
     if (aria) cands.push('css=[aria-label="' + esc(aria) + '"]');
+    const nm = attr(el, "name");
+    if (nm) cands.push("css=[name='" + esc(nm) + "']");
+    if (role && name) cands.push("get_by_role=" + role + ", " + JSON.stringify(name));
     cands.push(cssPath(el));
     cands.push("xpath=" + absXPath(el));
     const seen = [];

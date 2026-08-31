@@ -226,7 +226,7 @@ export class ExecutionEngine {
           let preStatus = "passed";
           let preError: string | null = null;
           try {
-            await this._stepExecutor.execute(page, resolvedStep, env, variables);
+            await this._stepExecutor.execute(page, resolvedStep, env, variables, context);
           } catch (e) {
             // 断言失败 → failed；其余 → error（Python 用 AssertionError 区分）
             if (e instanceof Error && e.name === "AssertionError") {
@@ -295,7 +295,7 @@ export class ExecutionEngine {
   ): Promise<void> {
     const executionId = Number(caseItem["execution_id"]);
     const caseId = caseItem["case_id"] ?? "";
-    const page = await context.newPage();
+    let page = await context.newPage();
 
     recorder.beginCase(executionId, caseId, caseItem["name"] || caseId, page);
 
@@ -323,7 +323,13 @@ export class ExecutionEngine {
 
         let execResult: Record<string, unknown> | null = null;
         try {
-          execResult = await this._stepExecutor.execute(page, resolvedStep, env, variables);
+          execResult = await this._stepExecutor.execute(page, resolvedStep, env, variables, context);
+          // 多 tab 切换：switch_page 返回 switched，更新当前 page（后续步骤作用于新页）
+          if (execResult && execResult["switched"]) {
+            const pages = context.pages();
+            const target = pages[Number(execResult["index"])];
+            if (target) page = target;
+          }
         } catch (e) {
           if (e instanceof Error && e.name === "AssertionError") {
             status = "failed";

@@ -48,6 +48,8 @@ export const settings = {
   recordHeartbeatInterval: envFloat("RECORD_HEARTBEAT_INTERVAL", 1),
   recordViewport: parseViewport(envStr("RECORD_VIEWPORT", "1366,768")),
   recordPageLoadTimeoutMs: envInt("RECORD_PAGE_LOAD_TIMEOUT_MS", 60000),
+  // 录制浏览器 CDP 调试端口（>0 时开启，供自动化/调试连接操作录制浏览器）
+  recordCdpPort: envInt("RECORD_CDP_PORT", 0),
   reportDir: envStr("REPORT_DIR", path.resolve(process.cwd(), "reports")),
 
   // 派生回调 URL（config.py BACKEND_URL + 路径）

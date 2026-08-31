@@ -29,14 +29,35 @@ function codeEscape(s: string): string {
 export function toPlaywrightSelector(loc: string): string {
   if (!loc) return loc;
   const s = loc.trim();
+  // DSL 值常带 JSON 引号（get_by_role=textbox, "搜索"）→ 去两侧引号
+  const unquote = (v: string) => String(v).trim().replace(/^"|"$/g, "").replace(/"/g, '\\"');
   let m: RegExpExecArray | null;
-  if ((m = /^get_by_placeholder=(.+)$/.exec(s))) return `input[placeholder="${m[1]!.replace(/"/g, '\\"')}"]`;
-  if ((m = /^get_by_label=(.+)$/.exec(s))) return `[aria-label="${m[1]!.replace(/"/g, '\\"')}"]`;
-  if ((m = /^get_by_title=(.+)$/.exec(s))) return `[title="${m[1]!.replace(/"/g, '\\"')}"]`;
-  if ((m = /^get_by_alt_text=(.+)$/.exec(s))) return `img[alt="${m[1]!.replace(/"/g, '\\"')}"]`;
-  if ((m = /^get_by_role=([^,]+),\s*(.+)$/.exec(s))) return `[role="${m[1]!.trim()}"]:has-text("${m[2]!.replace(/"/g, '\\"')}")`;
-  if ((m = /^get_by_role=(.+)$/.exec(s))) return `[role="${m[1]!.replace(/"/g, '\\"')}"]`;
-  if ((m = /^get_by_text=(.+)$/.exec(s))) return `:text-is("${m[1]!.replace(/"/g, '\\"')}")`;
+  if ((m = /^get_by_placeholder=(.+)$/.exec(s))) return `input[placeholder="${unquote(m[1]!)}"]`;
+  if ((m = /^get_by_label=(.+)$/.exec(s))) return `[aria-label="${unquote(m[1]!)}"]`;
+  if ((m = /^get_by_title=(.+)$/.exec(s))) return `[title="${unquote(m[1]!)}"]`;
+  if ((m = /^get_by_alt_text=(.+)$/.exec(s))) return `img[alt="${unquote(m[1]!)}"]`;
+  if ((m = /^get_by_role=([^,]+),\s*(.+)$/.exec(s))) {
+    const role = m[1]!.trim();
+    const name = unquote(m[2]!);
+    // 输入类元素：CSS [role] 属性选择器匹配不到无显式 role 的 input → 用 input/textarea 组合
+    if (role === "textbox" || role === "searchbox") {
+      return `input[placeholder="${name}"], textarea[placeholder="${name}"], [role="${role}"][placeholder="${name}"], input[aria-label="${name}"], [role="${role}"][aria-label="${name}"], [role="${role}"]:has-text("${name}")`;
+    }
+    // 常见 role → 原生标签候选（无显式 role 属性的元素同样可命中）
+    const roleTag: Record<string, string> = {
+      button: "button",
+      link: "a",
+      checkbox: 'input[type="checkbox"]',
+      radio: 'input[type="radio"]',
+      combobox: "select",
+      option: "option",
+      heading: "h1,h2,h3,h4,h5,h6",
+    };
+    if (roleTag[role]) return `${roleTag[role]}:has-text("${name}"), [role="${role}"]:has-text("${name}")`;
+    return `[role="${role}"]:has-text("${name}")`;
+  }
+  if ((m = /^get_by_role=(.+)$/.exec(s))) return `[role="${m[1]!.trim()}"]`;
+  if ((m = /^get_by_text=(.+)$/.exec(s))) return `:text-is("${unquote(m[1]!)}")`;
   return s;
 }
 
@@ -75,20 +96,53 @@ export function generatePlaywrightJs(steps: RecordedStep[]): string {
     "(async () => {\n" +
     "  const browser = await chromium.launch({ headless: false });\n" +
     "  const context = await browser.newContext();\n" +
-    "  const page = await context.newPage();\n\n";
+    "  let page = await context.newPage();\n\n";
+
+  const CLICK_METHODS = new Set(["click", "click_ele", "click_by_text", "double_click_ele"]);
 
   let body = "";
-  for (const s of norm) {
+  for (let i = 0; i < norm.length; i++) {
+    const s = norm[i];
+    const next = norm[i + 1];
     body += `  // ===== Step ${s.step}${s.desc ? ": " + s.desc : ""} =====\n`;
     const method = s.method || "";
     const loc = toPlaywrightSelector(s.locator || "");
     const val = s.value || "";
+    const urlVal = (s as { params?: { url?: string } }).params?.url ?? s.url ?? "";
+    // 点击打开新 tab（target=_blank）：合并「点击 + 等待新页 + 切换」，新页后续步骤作用于 page
+    if (CLICK_METHODS.has(method) && next && next.method === "new_page") {
+      body += `  const [newPage] = await Promise.all([\n`;
+      body += `    context.waitForEvent('page', { timeout: 10000 }).catch(() => null),\n`;
+      body += `    page.click('${codeEscape(loc || val)}'),\n`;
+      body += `  ]);\n`;
+      body += `  if (newPage) { page = newPage; await page.waitForLoadState('domcontentloaded').catch(() => {}); }\n`;
+      body += "  await autoShot(page, '" + String(s.desc || s.method).slice(0, 24).replace(/'/g, '') + "');\n";
+      body += "\n";
+      i++; // new_page 步骤已合并处理
+      continue;
+    }
     switch (method) {
       case "click":
       case "click_ele":
       case "click_by_text":
       case "double_click_ele":
         body += `  await page.click('${codeEscape(loc || val)}');\n`;
+        break;
+      case "new_page":
+        // 新页由之前的点击打开：等待出现并切换到最新页面（点击在前的录制顺序下立即命中）
+        body += `  const prevCount = context.pages().length;\n`;
+        body += `  let np = null;\n`;
+        body += `  for (let i = 0; i < 20 && !np; i++) {\n`;
+        body += `    const ps = context.pages();\n`;
+        body += `    if (ps.length > prevCount) np = ps[ps.length - 1];\n`;
+        body += `    else await page.waitForTimeout(100);\n`;
+        body += `  }\n`;
+        body += `  if (np) { page = np; await page.waitForLoadState('domcontentloaded').catch(() => {}); }\n`;
+        break;
+      case "switch_page":
+        // 按 tab 序号/url 切换（录制协议 new_page 的 tab_index）
+        body += `  page = context.pages()[${Number(val) || 0}] || page;\n`;
+        body += `  await page.waitForLoadState('domcontentloaded').catch(() => {});\n`;
         break;
       case "fill":
       case "type":
@@ -106,7 +160,7 @@ export function generatePlaywrightJs(steps: RecordedStep[]): string {
       case "navigate":
       case "open_url":
       case "goto":
-        body += `  await page.goto('${codeEscape(val || s.url || "")}');\n`;
+        body += `  await page.goto('${codeEscape(urlVal)}');\n`;
         break;
       case "press":
       case "press_key":

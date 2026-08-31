@@ -2,7 +2,7 @@
  * 步骤分发器：将 method 映射到 Playwright API。
  * 1:1 对照 brick_runner_http/runner/step_executor.py。
  */
-import type { Frame, Page } from "playwright";
+import type { BrowserContext, Frame, Page } from "playwright";
 import { resolve as resolveLocator } from "./locator-utils.js";
 import { runSmartStep } from "./smart-step.js";
 import { toPageFunction } from "@brickcore/smartbrowser";
@@ -31,6 +31,7 @@ export class StepExecutor {
     step: Record<string, any>,
     env: EnvConfig,
     variables: Variables,
+    context?: BrowserContext,
   ): Promise<Record<string, unknown> | null> {
     const method = step["method"] as string;
     const params = (step["params"] ?? {}) as Record<string, any>;
@@ -39,7 +40,22 @@ export class StepExecutor {
     // ================================================================
     // 1. 页面操作
     // ================================================================
-    if (method === "open_browser") {
+    if (method === "switch_page") {
+      // 多 tab 切换：按 index 或 url 定位目标页；返回 switched 供引擎更新当前 page
+      const pages = context?.pages() ?? [pageApi];
+      let target: Page | undefined;
+      const idx = Number(params["index"] ?? params["value"] ?? 0);
+      if (Number.isInteger(idx) && idx >= 0 && idx < pages.length) {
+        target = pages[idx];
+      } else {
+        const urlQ = String(params["url"] ?? "");
+        if (urlQ) target = pages.find((p) => p.url().includes(urlQ));
+      }
+      if (!target) {
+        throw new Error(`switch_page 失败：索引 ${idx} 或 url 无匹配页面（当前 ${pages.length} 个 tab）`);
+      }
+      return { switched: true, index: pages.indexOf(target), url: target.url() };
+    } else if (method === "open_browser") {
       // 浏览器上下文已由引擎创建，此处无需新建；
       // 初始导航地址优先取步骤 url，否则回退到环境/项目默认起始 URL / target_host
       let url: string | undefined = params["url"];

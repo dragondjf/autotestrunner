@@ -77,7 +77,12 @@ export class RecordingSession {
   private _browser: Browser | null = null;
   private _context: BrowserContext | null = null;
   private _page: Page | null = null;
-  private _lastUrl: string | null = null;
+  /** 每页最近 URL（多 tab 导航检测） */
+  private _lastUrls = new Map<Page, string>();
+  /** 最近一次点击的选择器（打开新 tab 时写入 new_page 动作） */
+  private _lastClickSelector = "";
+  /** 新出现的页面（等待心跳采集对应 click 后按序 push new_page 动作） */
+  private _pendingNewPages = new Map<Page, number>();
   private _heartbeatTask: Promise<void> | null = null;
   private _timeoutTask: Promise<void> | null = null;
   private _stopWaiters: Array<() => void> = [];
@@ -126,6 +131,7 @@ export class RecordingSession {
   }
 
   private async _startBrowser(): Promise<void> {
+    const cdpPort = settings.recordCdpPort > 0 ? `--remote-debugging-port=${settings.recordCdpPort}` : "";
     this._browser = await chromium.launch({
       headless: settings.recordHeadless,
       args: [
@@ -134,6 +140,7 @@ export class RecordingSession {
         "--disable-blink-features=AutomationControlled",
         "--disable-infobars",
         "--disable-popup-blocking",
+        ...(cdpPort ? [cdpPort] : []),
       ],
     });
     const vp = settings.recordViewport;
@@ -153,10 +160,28 @@ export class RecordingSession {
       waitUntil: "domcontentloaded",
       timeout: settings.recordPageLoadTimeoutMs,
     });
+    // 初始导航记录为 navigate 动作（生成脚本需要打开起始页）
+    this.actions.push({
+      action_type: "navigate",
+      timestamp: Math.round(Date.now()),
+      url: this._page.url(),
+      tab_index: 0,
+      meta: {},
+    });
     // 对已存在的 iframe 手工再注入一次
     await this._injectExistingFrames();
-    this._lastUrl = this._page.url();
+    this._lastUrls.set(this._page, this._page.url());
     this.frames = await this._computeFrames();
+
+    // 多 tab：监听新页面打开 → 记入 pending（心跳采集到触发 click 后按序 push new_page）
+    this._context.on("page", (p) => {
+      const pages = this._context?.pages() ?? [p];
+      const tabIndex = Math.max(0, pages.length - 1);
+      this._lastUrls.set(p, p.url());
+      this._pendingNewPages.set(p, tabIndex);
+      // 页面关闭时清理导航记录
+      p.once("close", () => this._lastUrls.delete(p));
+    });
 
     this._heartbeatTask = this._heartbeatLoop();
     this._timeoutTask = this._autoStop();
@@ -178,27 +203,65 @@ export class RecordingSession {
   private async _heartbeatLoop(): Promise<void> {
     while (!this._stop) {
       try {
-        if (this._page && !this.paused && !this._finishEmitted) {
-          const raw = (await this._page.evaluate(() => {
-            const w = window as unknown as {
-              __RECORDED__?: Record<string, unknown>[];
-            };
-            const a = w.__RECORDED__ || [];
-            w.__RECORDED__ = [];
-            return a;
-          })) as Record<string, unknown>[] | null;
-          for (const it of raw ?? []) this.actions.push(it);
-          // 检测用户导航
-          const curr = this._page.url();
-          if (this._lastUrl !== null && curr !== this._lastUrl) {
-            this.actions.push({
-              action_type: "navigate",
-              timestamp: Math.round(Date.now()),
-              url: curr,
-              meta: {},
-            });
+        if (this._context && !this.paused && !this._finishEmitted) {
+          // 多 tab：逐页采集动作 + 导航检测（动作带 tab_index 标识来源页）
+          const pages = this._context.pages();
+          for (let ti = 0; ti < pages.length; ti++) {
+            const pg = pages[ti];
+            try {
+              const raw = (await pg.evaluate(() => {
+                const w = window as unknown as {
+                  __RECORDED__?: Record<string, unknown>[];
+                };
+                const a = w.__RECORDED__ || [];
+                w.__RECORDED__ = [];
+                return a;
+              })) as Record<string, unknown>[] | null;
+              for (const it of raw ?? []) {
+                // 记录最近一次点击选择器（新 tab 动作关联用）
+                if (String(it["action_type"]) === "click" && it["selector"]) this._lastClickSelector = String(it["selector"]);
+                it["tab_index"] = ti;
+                this.actions.push(it);
+              }
+              // 检测该页用户导航
+              const curr = pg.url();
+              const prev = this._lastUrls.get(pg);
+              if (prev !== null && prev !== undefined && curr !== prev) {
+                this.actions.push({
+                  action_type: "navigate",
+                  timestamp: Math.round(Date.now()),
+                  url: curr,
+                  tab_index: ti,
+                  meta: {},
+                });
+              }
+              this._lastUrls.set(pg, curr);
+            } catch {
+              /* 页面已关闭/导航中，跳过 */
+            }
           }
-          this._lastUrl = curr;
+          // 新页面按序 push new_page（在触发它的 click 动作之后）
+          if (this._pendingNewPages.size) {
+            for (const [pg, tabIndex] of this._pendingNewPages) {
+              const act: Record<string, unknown> = {
+                action_type: "new_page",
+                timestamp: Math.round(Date.now()),
+                url: pg.url(),
+                selector: this._lastClickSelector,
+                tab_index: tabIndex,
+                meta: { opener: this._lastClickSelector || undefined },
+              };
+              this.actions.push(act);
+              // 初始 url 多为 about:blank：加载完成后补全真实 url
+              if (!String(pg.url()).startsWith("http")) {
+                pg.once("load", () => {
+                  act["url"] = pg.url();
+                  act["url_loaded"] = true;
+                });
+              }
+            }
+            this._pendingNewPages.clear();
+          }
           this.frames = await this._computeFrames();
         }
         await this._postHeartbeat();
