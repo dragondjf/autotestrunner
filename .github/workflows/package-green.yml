@@ -58,6 +58,9 @@ jobs:
 
       - name: Verify native bindings
         # 打包前就地验证原生模块已编译, 防止缺 binding 的包溜进 Release
+        # shell: bash 必须显式指定 —— Windows 默认 pwsh 会把多行 bash 拆碎,
+        # 且 find 会解析到 Windows find.exe (File not found)
+        shell: bash
         run: |
           test -n "$(find node_modules/.pnpm -path '*better-sqlite3*' -name 'better_sqlite3.node' -print -quit)" \
             || { echo '!! better_sqlite3.node 未编译 (pnpm 10 build scripts 被拦截?)'; exit 1; }
