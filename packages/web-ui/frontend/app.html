@@ -480,6 +480,22 @@
   .drawer .shots{margin-top:8px}
   .drawer .log{margin-top:8px;max-height:200px}
 
+  /* 历史录制会话详情：步骤 / 时间线 / 脚本 三栏 */
+  .rs-grid{display:grid;grid-template-columns:280px 1fr 1.15fr;gap:12px;height:calc(100vh - 190px);min-height:420px}
+  .rs-col{display:flex;flex-direction:column;padding:0;overflow:hidden;min-width:0}
+  .rs-col-head{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;flex:none}
+  .rs-col .pick-list{flex:1;overflow-y:auto;padding:8px}
+  .rs-tl{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:10px}
+  .rs-card{border:1px solid var(--border);border-radius:var(--radius);padding:10px;background:var(--input-bg)}
+  .rs-card.on{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary)}
+  .rs-card .rs-head{display:flex;align-items:center;gap:8px}
+  .rs-card .rs-desc{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px}
+  .rs-card .rs-meta{display:flex;flex-direction:column;gap:3px;margin-top:7px;font-size:11px;color:var(--text3);word-break:break-all;font-family:var(--mono)}
+  .rs-card .rs-meta b{color:var(--text2);font-weight:500;font-family:var(--ui,inherit)}
+  .rs-card .rs-shot{margin-top:8px;width:100%;border-radius:6px;border:1px solid var(--border);cursor:zoom-in;display:block}
+  .rs-method{font-size:10.5px;padding:1px 7px;border-radius:999px;background:var(--primary-dim);color:var(--primary);font-family:var(--mono);flex:none}
+  .rs-method.bad{background:rgba(239,68,68,.12);color:var(--danger)}
+
   /* 代码预览 */
   .code-pre{background:var(--input-bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px;
     font-family:var(--mono);font-size:12px;line-height:1.8;color:var(--text2);overflow-x:auto;white-space:pre}
@@ -492,6 +508,7 @@
   .row-edit:hover{color:var(--primary)}
   .row-act{cursor:pointer;padding:0 2px}
   .row-act:hover{color:var(--primary)}
+  .row-btn{padding:2px 8px;font-size:12px;line-height:1.5}
 
   .export-bar{display:none;align-items:center;gap:12px;margin-bottom:14px;padding:10px 14px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg)}
   .export-bar.show{display:flex}
@@ -534,6 +551,9 @@
       <div class="nav-sub">
         <div class="nav-item sub" data-page="page-projects">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>录制项目
+        </div>
+        <div class="nav-item sub" data-page="page-rec-history">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>历史录制
         </div>
         <div class="nav-item sub" data-page="page-debug">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v8M8 12h8M3 7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/></svg>脚本调试
@@ -728,11 +748,11 @@
           <table>
             <thead><tr><th style="width:30px"></th><th class="sortable" data-k="name">任务名称 <span class="sort-arrow">↕</span></th><th class="sortable" data-k="proj">项目 <span class="sort-arrow">↕</span></th><th>状态</th><th>浏览器</th><th>重试</th><th>操作</th></tr></thead>
             <tbody id="task-tbody">
-              <tr data-row="登录测试"><td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td><td onclick="openTaskRow('登录测试')" style="cursor:pointer;color:var(--text)"><b>登录测试</b></td><td>登录项目</td><td><span class="tag cyan">执行中</span></td><td class="mono">Chromium 120</td><td class="mono">0/3</td><td><span class="row-edit" title="编辑任务" onclick="editTaskRow(this)">✏️</span> <span class="row-act" title="执行" onclick="toast('任务已加入执行队列')">▶</span> <span class="row-act" title="查看报告" onclick="go('page-report')">📄</span></td></tr>
-              <tr data-row="购物车流程"><td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td><td onclick="openTaskRow('购物车流程')" style="cursor:pointer;color:var(--text)"><b>购物车流程</b></td><td>商城项目</td><td><span class="tag green">成功</span></td><td class="mono">Firefox 115</td><td class="mono">0/3</td><td><span class="row-edit" title="编辑任务" onclick="editTaskRow(this)">✏️</span> <span class="row-act" title="查看报告" onclick="go('page-report')">📄</span></td></tr>
-              <tr data-row="支付测试"><td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td><td onclick="openTaskRow('支付测试')" style="cursor:pointer;color:var(--text)"><b>支付测试</b></td><td>支付项目</td><td><span class="tag red">失败</span></td><td class="mono">Edge 118</td><td class="mono">3/3</td><td><span class="row-edit" title="编辑任务" onclick="editTaskRow(this)">✏️</span> <span class="row-act" title="执行" onclick="toast('任务已加入执行队列')">▶</span> <span class="row-act" title="查看报告" onclick="go('page-report')">📄</span></td></tr>
-              <tr data-row="注册流程"><td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td><td onclick="openTaskRow('注册流程')" style="cursor:pointer;color:var(--text)"><b>注册流程</b></td><td>注册项目</td><td><span class="tag amber">重试中</span></td><td class="mono">Chromium</td><td class="mono">2/3</td><td><span class="row-edit" title="编辑任务" onclick="editTaskRow(this)">✏️</span> <span class="row-act" title="查看报告" onclick="go('page-report')">📄</span></td></tr>
-              <tr data-row="订单查询"><td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td><td onclick="openTaskRow('订单查询')" style="cursor:pointer;color:var(--text)"><b>订单查询</b></td><td>订单项目</td><td><span class="tag gray">待执行</span></td><td class="mono">WebKit 17</td><td class="mono">0/3</td><td><span class="row-edit" title="编辑任务" onclick="editTaskRow(this)">✏️</span> <span class="row-act" title="执行" onclick="toast('任务已加入执行队列')">▶</span> <span class="row-act" title="查看报告" onclick="go('page-report')">📄</span></td></tr>
+              <tr data-row="登录测试"><td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td><td onclick="openTaskRow('登录测试')" style="cursor:pointer;color:var(--text)"><b>登录测试</b></td><td>登录项目</td><td><span class="tag cyan">执行中</span></td><td class="mono">Chromium 120</td><td class="mono">0/3</td><td><button class="btn ghost row-btn" onclick="editTaskRow(this)">编辑</button> <button class="btn ghost row-btn" onclick="toast('任务已加入执行队列')">执行</button> <button class="btn ghost row-btn" onclick="go('page-report')">报告</button></td></tr>
+              <tr data-row="购物车流程"><td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td><td onclick="openTaskRow('购物车流程')" style="cursor:pointer;color:var(--text)"><b>购物车流程</b></td><td>商城项目</td><td><span class="tag green">成功</span></td><td class="mono">Firefox 115</td><td class="mono">0/3</td><td><button class="btn ghost row-btn" onclick="editTaskRow(this)">编辑</button> <button class="btn ghost row-btn" onclick="go('page-report')">报告</button></td></tr>
+              <tr data-row="支付测试"><td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td><td onclick="openTaskRow('支付测试')" style="cursor:pointer;color:var(--text)"><b>支付测试</b></td><td>支付项目</td><td><span class="tag red">失败</span></td><td class="mono">Edge 118</td><td class="mono">3/3</td><td><button class="btn ghost row-btn" onclick="editTaskRow(this)">编辑</button> <button class="btn ghost row-btn" onclick="toast('任务已加入执行队列')">执行</button> <button class="btn ghost row-btn" onclick="go('page-report')">报告</button></td></tr>
+              <tr data-row="注册流程"><td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td><td onclick="openTaskRow('注册流程')" style="cursor:pointer;color:var(--text)"><b>注册流程</b></td><td>注册项目</td><td><span class="tag amber">重试中</span></td><td class="mono">Chromium</td><td class="mono">2/3</td><td><button class="btn ghost row-btn" onclick="editTaskRow(this)">编辑</button> <button class="btn ghost row-btn" onclick="go('page-report')">报告</button></td></tr>
+              <tr data-row="订单查询"><td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td><td onclick="openTaskRow('订单查询')" style="cursor:pointer;color:var(--text)"><b>订单查询</b></td><td>订单项目</td><td><span class="tag gray">待执行</span></td><td class="mono">WebKit 17</td><td class="mono">0/3</td><td><button class="btn ghost row-btn" onclick="editTaskRow(this)">编辑</button> <button class="btn ghost row-btn" onclick="toast('任务已加入执行队列')">执行</button> <button class="btn ghost row-btn" onclick="go('page-report')">报告</button></td></tr>
             </tbody>
           </table>
           <div class="pager" id="task-pager"></div>
@@ -792,10 +812,16 @@
         <div class="page-sub">该任务的全部执行报告历史 · 每次迭代独立生成一份报告</div>
         <div class="toolbar" style="justify-content:flex-end;padding-bottom:10px"><div class="seg" id="view-history"><span class="on" data-view="list">列表</span><span data-view="card">卡片</span></div></div>
         <div class="tasktable show" style="border:none">
+          <div class="list-tools" style="padding:12px 14px 0">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="th-check-all" style="accent-color:var(--primary)"> 全选</label>
+            <span style="color:var(--text3)">已选 <b id="th-sel-count">0</b> 项</span>
+            <span class="grow"></span>
+            <button class="btn" style="padding:5px 10px;font-size:12px" onclick="Bridge.batchDeleteReports()">🗑 批量删除</button>
+          </div>
           <table>
-            <thead><tr><th>报告 ID</th><th>迭代</th><th>状态</th><th>通过率</th><th>步骤</th><th>耗时</th><th>时间</th><th>操作</th></tr></thead>
+            <thead><tr><th style="width:30px"></th><th>报告 ID</th><th>迭代</th><th>状态</th><th>通过率</th><th>步骤</th><th>耗时</th><th>时间</th><th>操作</th></tr></thead>
             <tbody id="th-tbody">
-              <tr><td colspan="8" style="text-align:center;color:var(--text3);padding:36px">加载中…</td></tr>
+              <tr><td colspan="9" style="text-align:center;color:var(--text3);padding:36px">加载中…</td></tr>
             </tbody>
           </table>
         </div>
@@ -981,8 +1007,14 @@
           <div class="seg" id="view-plans"><span class="on" data-view="list">列表</span><span data-view="card">卡片</span></div>
         </div>
         <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px">
+          <div class="list-tools" style="padding:12px 14px 0">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="plan-check-all" style="accent-color:var(--primary)"> 全选</label>
+            <span style="color:var(--text3)">已选 <b id="plan-sel-count">0</b> 项</span>
+            <span class="grow"></span>
+            <button class="btn" style="padding:5px 10px;font-size:12px" onclick="Bridge.batchDeletePlans()">🗑 删除</button>
+          </div>
           <table>
-            <thead><tr><th>计划名称</th><th>触发</th><th>状态</th><th>任务数</th><th>描述</th><th>最近运行</th><th>操作</th></tr></thead>
+            <thead><tr><th style="width:30px"></th><th>计划名称</th><th>触发</th><th>状态</th><th>任务数</th><th>描述</th><th>最近运行</th><th>操作</th></tr></thead>
             <tbody id="plan-tbody"></tbody>
           </table>
         </div>
@@ -1065,12 +1097,17 @@
           <select style="width:auto;padding:7px 10px;font-size:12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)" onchange="toast('已按时间筛选：'+this.value)">
             <option>近 7 天</option><option>近 30 天</option><option>全部时间</option>
           </select>
-          <button class="btn ghost" onclick="toast('已批量删除所选报告','2 份')">🗑 批量删除</button>
         </div>
         <div style="display:flex;justify-content:flex-end;padding:0 2px 10px"><div class="seg" id="view-reports"><span class="on" data-view="list">列表</span><span data-view="card">卡片</span></div></div>
         <div class="card" style="padding:0;overflow:hidden">
+          <div class="list-tools" style="padding:12px 14px 0">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="rpt-check-all" style="accent-color:var(--primary)"> 全选</label>
+            <span style="color:var(--text3)">已选 <b id="rpt-sel-count">0</b> 项</span>
+            <span class="grow"></span>
+            <button class="btn" style="padding:5px 10px;font-size:12px" onclick="Bridge.batchDeleteReports()">🗑 批量删除</button>
+          </div>
           <table>
-            <thead><tr><th>报告 ID</th><th>迭代</th><th>状态</th><th>通过率</th><th>步骤</th><th>耗时</th><th>时间</th><th>操作</th></tr></thead>
+            <thead><tr><th style="width:30px"></th><th>报告 ID</th><th>迭代</th><th>状态</th><th>通过率</th><th>步骤</th><th>耗时</th><th>时间</th><th>操作</th></tr></thead>
             <tbody id="rpt-tbody"></tbody>
           </table>
         </div>
@@ -1120,8 +1157,14 @@
         <div class="page-sub">AI 录制与浏览器录制统一管理 · 点击卡片查看详情</div>
         <div style="display:flex;justify-content:flex-end;padding-bottom:10px"><div class="seg" id="view-projects"><span class="on" data-view="list">列表</span><span data-view="card">卡片</span></div></div>
         <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px">
+          <div class="list-tools" style="padding:12px 14px 0">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="proj-check-all" style="accent-color:var(--primary)"> 全选</label>
+            <span style="color:var(--text3)">已选 <b id="proj-sel-count">0</b> 项</span>
+            <span class="grow"></span>
+            <button class="btn" style="padding:5px 10px;font-size:12px" onclick="Bridge.batchDeleteProjects()">🗑 删除</button>
+          </div>
           <table>
-            <thead><tr><th>项目名称</th><th>类型</th><th>状态</th><th>步骤</th><th>创建时间</th><th>操作</th></tr></thead>
+            <thead><tr><th style="width:30px"></th><th>项目名称</th><th>类型</th><th>状态</th><th>步骤</th><th>创建时间</th><th>操作</th></tr></thead>
             <tbody id="proj-tbody"></tbody>
           </table>
         </div>
@@ -1130,6 +1173,24 @@
         <div class="entry-banner">
           <div class="entry"><div><div class="e-t">开始 AI 录制</div><div class="e-d">自然语言描述任务，AI 自主探索生成脚本</div></div><button class="btn primary" onclick="Bridge.openProjModal()">新建录制项目</button></div>
           <div class="entry"><div><div class="e-t">开始浏览器录制</div><div class="e-d">手动操作，系统精确捕获并生成步骤</div></div><button class="btn" onclick="go('page-browser')">去录制</button></div>
+        </div>
+      </section>
+
+      <!-- ===== 历史录制（项目录制会话列表） ===== -->
+      <section class="page" id="page-rec-history">
+        <div class="page-title">历史录制 <span class="tag cyan">Recordings</span>
+          <span style="margin-left:auto" class="h-row">
+            <select id="rec-hist-project" onchange="Bridge.recHistLoad()" style="background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:5px 10px;font-size:12px"></select>
+            <button class="btn primary" id="rec-hist-new-btn" onclick="Bridge.recHistNew()">+ 新建录制</button>
+            <button class="btn ghost" onclick="Bridge.recHistLoad()">↻ 刷新</button>
+          </span></div>
+        <div class="page-sub">所选项目的每次录制会话 · 查看回放 / 进入脚本调试 / 删除</div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <table>
+            <thead><tr><th>会话 ID</th><th>类型</th><th>起始 URL</th><th>步骤</th><th>状态</th><th>录制时间</th><th>操作</th></tr></thead>
+            <tbody id="rec-hist-tbody"><tr><td colspan="7" style="text-align:center;color:var(--text3);padding:36px">加载中…</td></tr></tbody>
+          </table>
+          <div class="pager" id="rec-hist-pager"></div>
         </div>
       </section>
 
@@ -1156,41 +1217,33 @@
         <div class="drawer-foot"><button class="btn" onclick="Bridge.openProjModal(window.__currentProjectId)">编辑</button><button class="btn primary" onclick="Bridge.createTaskFromProject(window.__currentProjectId)">🧪 创建测试任务</button></div>
       </aside>
 
-      <!-- ===== 会话历史详情抽屉（录制会话：时间线 / JSON 协议 / 生成脚本） ===== -->
-      <div class="drawer-mask" id="sess-mask" onclick="closeSessDrawer()"></div>
-      <aside class="drawer wide" id="sess-drawer">
-        <div class="drawer-head"><span class="tag cyan">录制会话</span><h3 id="sess-d-title">会话历史</h3><span class="drawer-x" onclick="closeSessDrawer()">&times;</span></div>
-        <div class="drawer-body">
-          <div class="detail-item"><span class="k">会话 ID</span><span class="v mono" id="sess-d-id">-</span></div>
-          <div class="detail-item"><span class="k">起始 URL</span><span class="v mono" id="sess-d-url">-</span></div>
-          <div class="detail-item"><span class="k">状态</span><span class="v" id="sess-d-status">-</span></div>
-          <div class="detail-item"><span class="k">步骤数</span><span class="v" id="sess-d-steps">0</span></div>
-          <div class="drawer-sec" style="display:flex;align-items:center;gap:0">
-            <div class="seg" id="sess-tabs" style="width:100%">
-              <span class="on" data-tab="timeline" style="flex:1;text-align:center" onclick="Bridge.switchSessTab('timeline')">时间线</span>
-              <span data-tab="json" style="flex:1;text-align:center" onclick="Bridge.switchSessTab('json')">JSON 协议</span>
-              <span data-tab="script" style="flex:1;text-align:center" onclick="Bridge.switchSessTab('script')">生成脚本</span>
-            </div>
+      <!-- ===== 历史录制会话详情（步骤 / 时间线 / 脚本 三栏） ===== -->
+      <section class="page" id="page-rec-session">
+        <div class="page-title">
+          <button class="btn ghost" style="padding:3px 12px" onclick="go('rec-history','record')">← 返回列表</button>
+          <span id="rs-title">录制会话</span>
+          <span id="rs-status"></span>
+          <span style="margin-left:auto" class="h-row">
+            <button class="btn ghost" onclick="Bridge.copySessScript()">复制脚本</button>
+            <button class="btn" onclick="Bridge.saveSessAsProject()">保存为录制项目</button>
+            <button class="btn primary" onclick="Bridge.openSessionDebugFromView()">进入脚本调试</button>
+          </span></div>
+        <div class="page-sub mono" id="rs-meta">-</div>
+        <div class="rs-grid">
+          <div class="card rs-col">
+            <div class="rs-col-head">步骤 <span class="mono" style="color:var(--text3);font-weight:400" id="rs-steps-count"></span></div>
+            <div class="pick-list" id="rs-steps"></div>
           </div>
-          <!-- 时间线视图 -->
-          <div id="sess-tab-timeline">
-            <div class="pick-list" id="sess-timeline" style="max-height:340px"></div>
+          <div class="card rs-col">
+            <div class="rs-col-head">时间线 <span style="font-size:11px;color:var(--text3);font-weight:400">点击步骤同步定位</span></div>
+            <div class="rs-tl" id="rs-timeline"></div>
           </div>
-          <!-- JSON 协议视图 -->
-          <div id="sess-tab-json" style="display:none">
-            <div class="code-pre" id="sess-json" style="max-height:340px;overflow:auto"></div>
-          </div>
-          <!-- 生成脚本视图 -->
-          <div id="sess-tab-script" style="display:none">
-            <div class="h-row" style="justify-content:flex-end;margin-bottom:8px">
-              <button class="btn ghost" style="padding:3px 10px;font-size:11px" onclick="Bridge.copySessScript()">复制脚本</button>
-              <button class="btn" style="padding:3px 10px;font-size:11px" onclick="Bridge.saveSessAsProject()">保存为录制项目</button>
-            </div>
-            <div class="code-pre" id="sess-script" style="max-height:340px;overflow:auto">// 点击「生成脚本」查看</div>
+          <div class="card rs-col">
+            <div class="rs-col-head">脚本 <span class="mono" style="color:var(--text3);font-weight:400">Playwright JS</span></div>
+            <div class="code-pre" id="rs-script" style="flex:1;overflow:auto;border:none;border-radius:0">// 加载中…</div>
           </div>
         </div>
-        <div class="drawer-foot"><button class="btn ghost" onclick="closeSessDrawer()">关闭</button></div>
-      </aside>
+      </section>
 
       <!-- ===== 项目编辑弹窗 ===== -->
       <div class="modal-mask" id="proj-modal-mask" onclick="closeProjModal()"></div>
@@ -1229,6 +1282,8 @@
               <span class="on" data-mode="headless" style="padding:4px 12px;font-size:12px" onclick="Bridge.dwSetMode('headless')">无头</span>
               <span data-mode="headed" style="padding:4px 12px;font-size:12px" onclick="Bridge.dwSetMode('headed')">有头</span>
             </div>
+            <span class="h-row" style="align-items:center;gap:4px;font-size:12px;color:var(--text2)" title="每个步骤执行后的等待毫秒数，0 = 不等待">步骤间隔
+              <input id="dw-step-gap" type="number" min="0" step="100" value="500" style="width:72px;background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:12px">ms</span>
             <select id="dw-project" onchange="Bridge.dwLoadFiles()" style="background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:5px 10px;font-size:12px"></select>
             <button class="btn ghost" id="dw-session-btn" onclick="Bridge.dwToggleSession()" style="padding:5px 12px;font-size:12px">▶ 连接调试会话</button>
           </span></div>
@@ -1334,6 +1389,8 @@
               <span class="on" data-mode="headless" style="padding:4px 12px;font-size:12px" onclick="Bridge.dwSetMode('headless')">无头</span>
               <span data-mode="headed" style="padding:4px 12px;font-size:12px" onclick="Bridge.dwSetMode('headed')">有头</span>
             </div>
+            <span class="h-row" style="align-items:center;gap:4px;font-size:12px;color:var(--text2)" title="每个步骤执行后的等待毫秒数，0 = 不等待">步骤间隔
+              <input id="dw-step-gap_t" type="number" min="0" step="100" value="500" style="width:72px;background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:12px">ms</span>
             <select id="dw-project_t" onchange="Bridge.dwLoadFiles()" style="background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:5px 10px;font-size:12px"></select>
             <button class="btn ghost" id="dw-session-btn_t" onclick="Bridge.dwToggleSession()" style="padding:5px 12px;font-size:12px">▶ 连接调试会话</button>
           </span></div>
@@ -1439,7 +1496,7 @@
 
 <script>
   // ===== 导航 =====
-  const crumbMap={dashboard:"工作台","task-list":"任务列表","task-list":"任务列表",exec:"执行监控","task-history":"任务历史","task-detail":"任务详情",plans:"计划列表",projects:"录制项目",ai:"AI 录制",browser:"浏览器录制",debug:"脚本调试","debug-task":"任务脚本调试",reports:"报告列表",report:"报告详情"};
+    const crumbMap={dashboard:"工作台","task-list":"任务列表","task-list":"任务列表",exec:"执行监控","task-history":"任务历史","task-detail":"任务详情",plans:"计划列表",projects:"录制项目","rec-history":"历史录制","rec-session":"历史录制",ai:"AI 录制",browser:"浏览器录制",debug:"脚本调试","debug-task":"任务脚本调试",reports:"报告列表",report:"报告详情"};
   function go(id, secKey, params){
     document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -1466,7 +1523,7 @@
     if(location.hash!=='#/'+hashKey+qs) location.hash='#/'+hashKey+qs;
   }
   // ===== hash 路由：初始化恢复 + 前进后退/手动改 URL =====
-  const PAGE_KEYS={dashboard:'page-dashboard','task-list':'page-task-list',exec:'page-exec','task-history':'page-task-history','task-detail':'page-task-detail',plans:'page-plans',projects:'page-projects',ai:'page-ai',browser:'page-browser',debug:'page-debug','debug-task':'page-debug-task',reports:'page-reports',report:'page-report'};
+  const PAGE_KEYS={dashboard:'page-dashboard','task-list':'page-task-list',exec:'page-exec','task-history':'page-task-history','task-detail':'page-task-detail',plans:'page-plans',projects:'page-projects','rec-history':'page-rec-history','rec-session':'page-rec-session',ai:'page-ai',browser:'page-browser',debug:'page-debug','debug-task':'page-debug-task',reports:'page-reports',report:'page-report'};
   function pageFromHash(){
     const m=location.hash.replace(/^#\//,'').split('?');
     return { pid: PAGE_KEYS[m[0]]||null, key: m[0]||'', qs: m[1]||'' };
@@ -1482,10 +1539,12 @@
     return out;
   }
   // 页面归属分组映射（无菜单项的归属页保持分组高亮）
-  const PAGE_SEC={dashboard:null,'task-list':'task','task-detail':'task','task-history':'task',exec:'task',plans:'plan',projects:'record',ai:'record',browser:'record',debug:null,'debug-task':'task',reports:'report',report:'report'};
+  const PAGE_SEC={dashboard:null,'task-list':'task','task-detail':'task','task-history':'task',exec:'task',plans:'plan',projects:'record','rec-history':'record','rec-session':'record',ai:'record',browser:'record',debug:null,'debug-task':'task',reports:'report',report:'report'};
   window.addEventListener('hashchange',function(){
     // 用户导航/前进后退：页面由 go 切换；数据恢复由各页自身逻辑完成（避免 openReport 重入循环）
     const { pid }=pageFromHash();
+    // 会话三栏视图依赖内存中的会话数据：刷新/直接输入地址无数据 → 弹回历史列表
+    if(pid==='page-rec-session' && !window.__sessionView){ go('rec-history','record'); return; }
     if(pid){ const k=pid.replace('page-',''); go(pid, PAGE_SEC[k] ?? null, hashParams()); }
     // 纯 hash 导航（同文档跳转）不触发 DOMContentLoaded → 补一次上下文恢复（各分支幂等/去重）
     if(window.__restorePageParams && pid){
@@ -1516,10 +1575,6 @@
   function closeTaskWizard(){
     document.getElementById('task-wizard-mask').classList.remove('show');
     document.getElementById('task-wizard-modal').classList.remove('show');
-  }
-  function closeSessDrawer(){
-    document.getElementById('sess-mask').classList.remove('show');
-    document.getElementById('sess-drawer').classList.remove('show');
   }
   function toggleSec(key){
     const sec=document.querySelector('.nav-sec[data-sec="'+key+'"]');
@@ -1677,15 +1732,7 @@
     applyTaskFilter();
   }));
 
-  // ---- 任务列表：批量勾选 ----
-  const checkAll=document.getElementById('check-all');
-  const selCount=document.getElementById('sel-count');
-  function updSel(){if(selCount)selCount.textContent=document.querySelectorAll('.row-check:checked').length;}
-  if(checkAll)checkAll.addEventListener('change',()=>{
-    document.querySelectorAll('.row-check').forEach(c=>c.checked=checkAll.checked);
-    updSel();
-  });
-  document.querySelectorAll('.row-check').forEach(c=>c.addEventListener('change',updSel));
+  // ---- 任务列表：批量勾选（全选/计数/批量删除由 app-bridge 统一控制器接管） ----
 
   // ---- 任务列表：表头排序（演示切换箭头）----
   document.querySelectorAll('th.sortable').forEach(th=>th.addEventListener('click',()=>{
@@ -1724,10 +1771,11 @@
     const sf=document.querySelector('#rpt-status-filters .filter-chip.on');
     const sff=sf?sf.dataset.f:'all';
     document.querySelectorAll('#page-reports tbody tr').forEach(tr=>{
+      // 列结构：0 勾选 · 1 报告 ID · 2 迭代 · 3 状态 · 4 通过率 · 5 步骤 · 6 耗时 · 7 时间 · 8 操作
       const name=(tr.cells[1].textContent+tr.cells[2].textContent).toLowerCase();
-      const type=tr.cells[3].textContent.indexOf('计划')>=0?'plan':'task';
-      const stext=tr.cells[5].textContent;
-      const st=stext.indexOf('部分失败')>=0?'partial':stext.indexOf('失败')>=0?'fail':'pass';
+      const type=tr.getAttribute('data-type')||'task';
+      const stext=tr.cells[3].textContent;
+      const st=stext.indexOf('failed')>=0?'fail':stext.indexOf('success')>=0?'pass':'partial';
       const ok=(kw===''||name.includes(kw))&&(tff==='all'||type===tff)&&(sff==='all'||st===sff);
       tr.style.display=ok?'':'none';
     });
@@ -1743,11 +1791,7 @@
     c.classList.add('on');applyReportFilter();
   }));
 
-  // ---- 报告列表：全选 ----
-  const rptCheckAll=document.getElementById('rpt-check-all');
-  if(rptCheckAll)rptCheckAll.addEventListener('change',()=>{
-    document.querySelectorAll('#page-reports tbody input[type=checkbox]').forEach(c=>c.checked=rptCheckAll.checked);
-  });
+  // ---- 报告列表：全选（由 app-bridge 统一批量选择控制器接管） ----
 
   // ---- 报告详情：步骤折叠 ----
   function toggleStep(tr){

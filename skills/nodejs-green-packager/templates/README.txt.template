@@ -1,0 +1,36 @@
+========================================
+MyApp - 绿色便携版
+========================================
+
+版本: Node.js 22
+包含: Playwright Chromium 浏览器
+
+📦 目录结构
+-----------
+node/           - Node.js 22 运行时
+dist/           - 项目构建产物
+node_modules/   - 项目依赖
+.cache/         - Playwright 浏览器缓存
+
+🚀 使用方法
+-----------
+Windows: 双击 start.bat
+Linux:   ./start.sh
+
+🛑 停止服务
+-----------
+Windows: 双击 stop.bat
+Linux:   ./stop.sh
+
+📝 传递参数
+-----------
+start.bat --port 3000
+./start.sh --port 3000
+
+⚙️ 配置文件
+-----------
+如需修改配置，请编辑 .env 文件
+
+📋 日志文件
+-----------
+app.log - 应用运行日志

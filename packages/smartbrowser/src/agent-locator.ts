@@ -95,44 +95,64 @@ function inferRole(el: LocatorElement): string {
   return "";
 }
 
-/** 按定位优先级生成候选定位器（1:1 build_candidates_from_element） */
+/**
+ * 按定位优先级生成候选定位器。
+ * 定位规则（高→低）：getByRole > getByText > getByLabel > getByPlaceholder
+ * > getByAltText > getByTitle > getByTestId > CSS > XPath（最后考虑）。
+ */
 export function buildCandidatesFromElement(el: LocatorElement, includeShort = false): string[] {
   const tag = String(el["tag"] ?? "").toLowerCase();
   const text = String(el["text"] ?? "").trim();
   const isShort = COMMON_SHORT_TEXTS.has(text) && !includeShort;
   const candidates: string[] = [];
 
-  const testid = String(el["data_testid"] ?? el["data-testid"] ?? "").trim();
-  if (testid) candidates.push(`[data-testid="${testid}"]`);
-
-  const elemId = String(el["id"] ?? "").trim();
-  if (elemId && !isDynamicElId(elemId)) {
-    candidates.push(`#${elemId}`);
-    if (tag === "button") candidates.push(`//button[@id='${elemId}']`);
-  }
-
+  // 1. getByRole —— 最优先
   if (text && !isShort && 1 < text.length && text.length < 40) {
     const role = inferRole(el);
     if (role) candidates.push(`get_by_role=${role}, ${text}`);
   }
 
-  if (text && 1 < text.length && text.length < 40 && !isShort) {
+  // 2. getByText —— 用户可见文本
+  if (text && !isShort && 1 < text.length && text.length < 40) {
     candidates.push(`get_by_text=${text}`);
   }
 
-  const name = String(el["name"] ?? "").trim();
-  if (name) candidates.push(`${tag}[name="${name}"]`);
+  // 3. getByLabel —— 表单标签
+  const aria = String(el["aria_label"] ?? "").trim();
+  if (aria) candidates.push(`get_by_label=${aria}`);
 
+  // 4. getByPlaceholder —— 输入框占位符
   const placeholder = String(el["placeholder"] ?? "").trim();
   if (placeholder && (tag === "input" || tag === "textarea")) {
     candidates.push(`get_by_placeholder=${placeholder}`);
   }
 
-  const aria = String(el["aria_label"] ?? "").trim();
-  if (aria) candidates.push(`get_by_label=${aria}`);
+  // 5. getByAltText —— 图片 alt
+  const alt = String(el["alt"] ?? "").trim();
+  if (alt && (tag === "img" || tag === "input")) candidates.push(`get_by_alt_text=${alt}`);
 
+  // 6. getByTitle —— title 属性
+  const title = String(el["title"] ?? "").trim();
+  if (title) candidates.push(`get_by_title=${title}`);
+
+  // 7. getByTestId —— 测试专用属性
+  const testid = String(el["data_testid"] ?? el["data-testid"] ?? "").trim();
+  if (testid) candidates.push(`get_by_test_id=${testid}`);
+
+  // 8. CSS 选择器 —— 备选
+  const elemId = String(el["id"] ?? "").trim();
+  if (elemId && !isDynamicElId(elemId)) {
+    candidates.push(`#${elemId}`);
+  }
+  const name = String(el["name"] ?? "").trim();
+  if (name) candidates.push(`${tag}[name="${name}"]`);
   const selector = String(el["selector"] ?? "").trim();
   if (selector && !candidates.includes(selector)) candidates.push(selector);
+
+  // 9. XPath —— 最后考虑
+  if (elemId && !isDynamicElId(elemId) && tag === "button") {
+    candidates.push(`//button[@id='${elemId}']`);
+  }
 
   // 父级作用域链式定位器：借助父容器限定作用域，规避同名元素 strict 冲突
   const parentSel = String(el["parent_selector"] ?? "").trim();
@@ -289,22 +309,23 @@ export function _semanticFillLocator(step: LocatorElement, elements: LocatorElem
   if (!desc) return "";
   const matched = FILL_SEMANTIC_HINTS.filter((w) => desc.includes(w));
   if (!matched.length) return "";
-  for (const el of elements) {
-    if (typeof el !== "object" || el === null) continue;
-    const tag = String(el["tag"] ?? "").toLowerCase();
-    if (tag !== "input" && tag !== "textarea") continue;
-    const ph = String(el["placeholder"] ?? "").trim();
-    const label = String(el["aria_label"] ?? "").trim();
-    const name = String(el["name"] ?? "").trim();
-    const haystack = `${ph} ${label} ${name}`;
-    for (const w of matched) {
-      if (haystack.includes(w)) {
-        if (ph) return `get_by_placeholder=${ph}`;
-        if (label) return `get_by_label=${label}`;
-        if (name) return `${el["tag"]}[name="${name}"]`;
+    for (const el of elements) {
+      if (typeof el !== "object" || el === null) continue;
+      const tag = String(el["tag"] ?? "").toLowerCase();
+      if (tag !== "input" && tag !== "textarea") continue;
+      const ph = String(el["placeholder"] ?? "").trim();
+      const label = String(el["aria_label"] ?? "").trim();
+      const name = String(el["name"] ?? "").trim();
+      const haystack = `${ph} ${label} ${name}`;
+      for (const w of matched) {
+        if (haystack.includes(w)) {
+          // 定位规则：getByLabel > getByPlaceholder > CSS name 属性
+          if (label) return `get_by_label=${label}`;
+          if (ph) return `get_by_placeholder=${ph}`;
+          if (name) return `${el["tag"]}[name="${name}"]`;
+        }
       }
     }
-  }
   return "";
 }
 
@@ -347,8 +368,15 @@ export function pickStableLocator(step: LocatorElement, elements: LocatorElement
     const el = findBestElement(elements, hints, { prefer_tags: ["input", "textarea"] });
     if (el) {
       const cands = buildCandidatesFromElement(el);
+      // 输入框取值随输入漂移：跳过 role/text 类候选，按规则取 label/placeholder/testid，再退 CSS
       for (const c of cands) {
-        if (c.startsWith("#") || c.startsWith("get_by_placeholder=") || c.startsWith("get_by_label=") || c.startsWith("[")) {
+        if (
+          c.startsWith("get_by_label=") ||
+          c.startsWith("get_by_placeholder=") ||
+          c.startsWith("get_by_test_id=") ||
+          c.startsWith("#") ||
+          c.startsWith("[")
+        ) {
           return c;
         }
       }

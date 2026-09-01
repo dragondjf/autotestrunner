@@ -1,0 +1,45 @@
+#!/bin/bash
+# MyApp - Linux 停止脚本模板
+# 复制为 stop.sh 并置于绿色版包根目录
+# 用法: ./stop.sh   (通过 PID 文件 + 端口双重查找)
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PID_FILE="$SCRIPT_DIR/app.pid"
+PORT="${PORT:-3000}"
+
+echo "========================================"
+echo "  Stopping MyApp Service"
+echo "========================================"
+echo
+
+if [ -f "$PID_FILE" ]; then
+    PID=$(cat "$PID_FILE")
+    echo "[INFO] 找到 PID 文件: $PID"
+    if kill -0 "$PID" 2>/dev/null; then
+        echo "[INFO] 正在终止进程 $PID ..."
+        kill "$PID"
+        sleep 2
+        if kill -0 "$PID" 2>/dev/null; then
+            echo "[WARN] 进程未响应，强制终止..."
+            kill -9 "$PID"
+        fi
+        echo "[OK] 进程已终止"
+        rm -f "$PID_FILE"
+    else
+        echo "[WARN] 进程 $PID 已不存在"
+        rm -f "$PID_FILE"
+    fi
+fi
+
+echo "[INFO] 尝试通过端口 $PORT 查找进程..."
+PIDS=$(lsof -ti :$PORT 2>/dev/null || true)
+if [ -n "$PIDS" ]; then
+    for PID in $PIDS; do
+        echo "[INFO] 找到占用端口 $PORT 的进程: $PID"
+        kill "$PID" 2>/dev/null || kill -9 "$PID" 2>/dev/null
+        echo "[OK] 进程 $PID 已终止"
+    done
+else
+    echo "[WARN] 未找到运行中的应用"
+fi
+echo

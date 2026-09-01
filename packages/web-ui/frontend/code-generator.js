@@ -11,34 +11,79 @@
     return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '');
   }
 
+  /** 压平多行文本（desc 可能含换行），避免嵌入注释时产生非法代码 */
+  function oneLine(s) {
+    return String(s == null ? '' : s).replace(/\s*\r?\n\s*/g, ' ').trim();
+  }
+
+  /** DSL 值去两侧成对包裹引号；字面 \n 序列归一为空格（Playwright 文本匹配做空白归一化） */
+  function unquoteVal(v) {
+    var t = String(v == null ? '' : v).trim();
+    if (t.length >= 2 && ((t.charAt(0) === '"' && t.charAt(t.length - 1) === '"') ||
+        (t.charAt(0) === "'" && t.charAt(t.length - 1) === "'"))) {
+      t = t.slice(1, -1).trim();
+    }
+    return t.replace(/\\n/g, ' ');
+  }
+
   /**
-   * 将 smartbrowser 内部定位 DSL 转为 Playwright 原生选择器。
-   * 例如：
-   *   get_by_placeholder=请输入账号 → input[placeholder="请输入账号"]
-   *   get_by_role=button, 登录       → [role="button"]:has-text("登录")
-   *   get_by_text=保存               → :text-is("保存")
-   *   get_by_label=用户名            → [aria-label="用户名"]
-   *   #id / [data-testid] / CSS      → 原样保留
+   * 平台定位 DSL → Playwright 原生定位表达式（不含 page. 锚，链式段以 . 连接）。
+   * 定位规则（高→低）：getByRole > getByText > getByLabel > getByPlaceholder
+   * > getByAltText > getByTitle > getByTestId > CSS > XPath（最后考虑）。
+   * 语义与运行时解析器（locator-utils）保持一致。
    */
-  function toPlaywrightSelector(loc) {
-    if (!loc) return loc;
-    var s = String(loc).trim();
-    var m;
-    m = s.match(/^get_by_placeholder=(.+)$/);
-    if (m) return 'input[placeholder="' + m[1].replace(/"/g, '\\"') + '"]';
-    m = s.match(/^get_by_label=(.+)$/);
-    if (m) return '[aria-label="' + m[1].replace(/"/g, '\\"') + '"]';
-    m = s.match(/^get_by_title=(.+)$/);
-    if (m) return '[title="' + m[1].replace(/"/g, '\\"') + '"]';
-    m = s.match(/^get_by_alt_text=(.+)$/);
-    if (m) return 'img[alt="' + m[1].replace(/"/g, '\\"') + '"]';
-    m = s.match(/^get_by_role=([^,]+),\s*(.+)$/);
-    if (m) return '[role="' + m[1].trim() + '"]:has-text("' + m[2].replace(/"/g, '\\"') + '")';
-    m = s.match(/^get_by_role=(.+)$/);
-    if (m) return '[role="' + m[1].replace(/"/g, '\\"') + '"]';
-    m = s.match(/^get_by_text=(.+)$/);
-    if (m) return ':text-is("' + m[1].replace(/"/g, '\\"') + '")';
-    return s;
+  function toPlaywrightExpr(loc) {
+    var raw = String(loc == null ? '' : loc).trim();
+    if (!raw) return '';
+    function seg(s) {
+      var m;
+      m = s.match(/^get_by_role=([^,]+),\s*([\s\S]+)$/);
+      if (m) {
+        var role = unquoteVal(m[1]).trim();
+        var name = unquoteVal(m[2]);
+        // LLM 变体：title= 非 accessible name → 退 getByTitle；name= 前缀剥离
+        var tm = name.match(/^title=["']?([\s\S]*?)["']?$/);
+        if (tm) return "getByTitle('" + codeEscape(unquoteVal(tm[1])) + "')";
+        var nm = name.match(/^name=["']?([\s\S]*?)["']?$/);
+        if (nm) name = unquoteVal(nm[1]);
+        return name
+          ? "getByRole('" + role + "', { name: '" + codeEscape(name) + "' })"
+          : "getByRole('" + role + "')";
+      }
+      m = s.match(/^get_by_role=(.+)$/);
+      if (m) return "getByRole('" + unquoteVal(m[1]).trim() + "')";
+      m = s.match(/^get_by_text=([\s\S]+)$/);
+      if (m) return "getByText('" + codeEscape(unquoteVal(m[1])) + "')";
+      m = s.match(/^get_by_label=([\s\S]+)$/);
+      if (m) return "getByLabel('" + codeEscape(unquoteVal(m[1])) + "')";
+      m = s.match(/^get_by_placeholder=([\s\S]+)$/);
+      if (m) return "getByPlaceholder('" + codeEscape(unquoteVal(m[1])) + "')";
+      m = s.match(/^get_by_alt_text=([\s\S]+)$/);
+      if (m) return "getByAltText('" + codeEscape(unquoteVal(m[1])) + "')";
+      m = s.match(/^get_by_title=([\s\S]+)$/);
+      if (m) return "getByTitle('" + codeEscape(unquoteVal(m[1])) + "')";
+      m = s.match(/^get_by_test_id=([\s\S]+)$/);
+      if (m) return "getByTestId('" + codeEscape(unquoteVal(m[1])) + "')";
+      m = s.match(/^nth\s*=\s*(\d+)$/);
+      if (m) return 'nth(' + m[1] + ')';
+      // 绝对 XPath（/html/...）需显式 xpath= 前缀；// 开头 Playwright 自动识别
+      var sel = /^\/(?!\/)/.test(s) ? 'xpath=' + s : s;
+      return "locator('" + codeEscape(sel) + "')";
+    }
+    return raw.split(' >> ').map(function (p) { return seg(p.trim()); }).join('.');
+  }
+
+  /** Python 版定位表达式（page.get_by_role(...)，不带 page. 锚） */
+  function toPlaywrightExprPy(loc) {
+    return toPlaywrightExpr(loc)
+      .replace(/getByRole\('([^']+)',\s*\{\s*name: ('[^']*')\s*\}\)/g, "get_by_role('$1', name=$2)")
+      .replace(/getByRole\('([^']+)'\)/g, "get_by_role('$1')")
+      .replace(/getByText\(/g, 'get_by_text(')
+      .replace(/getByLabel\(/g, 'get_by_label(')
+      .replace(/getByPlaceholder\(/g, 'get_by_placeholder(')
+      .replace(/getByAltText\(/g, 'get_by_alt_text(')
+      .replace(/getByTitle\(/g, 'get_by_title(')
+      .replace(/getByTestId\(/g, 'get_by_test_id(');
   }
 
   /** 将 steps[] 翻译为完整的 Playwright JS 脚本 */
@@ -47,48 +92,63 @@
     var h = 'const { chromium } = require(\'playwright\');\n\n(async () => {\n  const browser = await chromium.launch({ headless: false });\n  const context = await browser.newContext();\n  const page = await context.newPage();\n\n';
     var body = '';
     var currentUrl = '';
-    steps.forEach(function (s) {
-      body += '  // ===== Step ' + s.step + (s.desc ? ': ' + s.desc : '') + ' =====\n';
+    steps.forEach(function (s, idx) {
+      // 双通道录制的时间线 step 号可能重复/乱序 → 按输出顺序重编
+      body += '  // ===== Step ' + (idx + 1) + (s.desc ? ': ' + oneLine(s.desc) : '') + ' =====\n';
       if (s.url && s.url !== currentUrl) {
         body += '  await page.goto(\'' + codeEscape(s.url) + '\');\n';
         currentUrl = s.url;
       }
       var method = s.method || '';
-      var loc = toPlaywrightSelector(s.locator ? s.locator : (s.selector || ''));
+      var ex = toPlaywrightExpr(s.locator ? s.locator : (s.selector || ''));
       var val = s.value || '';
       switch (method) {
         case 'click':
-          body += '  await page.click(\'' + codeEscape(loc) + '\');\n'; break;
+          if (ex) body += '  await page.' + ex + '.click();\n';
+          break;
         case 'fill':
         case 'type':
-          body += '  await page.fill(\'' + codeEscape(loc) + '\', \'' + codeEscape(val) + '\');\n'; break;
+          if (ex) body += '  await page.' + ex + '.fill(\'' + codeEscape(val) + '\');\n';
+          break;
         case 'select':
-          body += '  await page.selectOption(\'' + codeEscape(loc) + '\', \'' + codeEscape(val) + '\');\n'; break;
+          if (ex) body += '  await page.' + ex + '.selectOption(\'' + codeEscape(val) + '\');\n';
+          break;
         case 'navigate':
-          body += '  await page.goto(\'' + codeEscape(val || s.url) + '\');\n'; break;
+          body += '  await page.goto(\'' + codeEscape(val || s.url) + '\');\n';
+          break;
         case 'wait_for_selector':
-          body += '  await page.waitForSelector(\'' + codeEscape(loc) + '\', { timeout: 5000 });\n'; break;
+          if (ex) body += '  await page.' + ex + '.waitFor({ timeout: 5000 });\n';
+          break;
         case 'screenshot':
-          body += '  await page.screenshot({ path: \'screenshot_step_' + s.step + '.png\' });\n'; break;
+          body += '  await page.screenshot({ path: \'screenshot_step_' + s.step + '.png\' });\n';
+          break;
         case 'press':
-          body += '  await page.press(\'' + codeEscape(loc) + '\', \'' + codeEscape(val) + '\');\n'; break;
+          body += ex
+            ? '  await page.' + ex + '.press(\'' + codeEscape(val) + '\');\n'
+            : '  await page.keyboard.press(\'' + codeEscape(val) + '\');\n';
+          break;
         case 'hover':
-          body += '  await page.hover(\'' + codeEscape(loc) + '\');\n'; break;
+          if (ex) body += '  await page.' + ex + '.hover();\n';
+          break;
         case 'check':
-          body += '  await page.check(\'' + codeEscape(loc) + '\');\n'; break;
+          if (ex) body += '  await page.' + ex + '.check();\n';
+          break;
         case 'uncheck':
-          body += '  await page.uncheck(\'' + codeEscape(loc) + '\');\n'; break;
+          if (ex) body += '  await page.' + ex + '.uncheck();\n';
+          break;
         case 'click_at':
-          body += '  await page.mouse.click(' + (s.sx || 0) + ', ' + (s.sy || 0) + ');\n'; break;
+          body += '  await page.mouse.click(' + (s.sx || 0) + ', ' + (s.sy || 0) + ');\n';
+          break;
         case 'drag':
           body += '  await page.mouse.move(' + (s.sx || 0) + ', ' + (s.sy || 0) + ');\n';
           body += '  await page.mouse.down();\n';
           body += '  await page.mouse.move(' + (s.ex || 0) + ', ' + (s.ey || 0) + ', { steps: 8 });\n';
-          body += '  await page.mouse.up();\n'; break;
+          body += '  await page.mouse.up();\n';
+          break;
         default:
-          if (loc) {
-            if (val) body += '  await page.fill(\'' + codeEscape(loc) + '\', \'' + codeEscape(val) + '\');\n';
-            else body += '  await page.click(\'' + codeEscape(loc) + '\');\n';
+          if (ex) {
+            if (val) body += '  await page.' + ex + '.fill(\'' + codeEscape(val) + '\');\n';
+            else body += '  await page.' + ex + '.click();\n';
           }
           break;
       }
@@ -107,41 +167,53 @@
     var h = 'from playwright.sync_api import sync_playwright\n\n\ndef run():\n    with sync_playwright() as p:\n        browser = p.chromium.launch(headless=False)\n        context = browser.new_context()\n        page = context.new_page()\n\n';
     var body = '';
     var currentUrl = '';
-    steps.forEach(function (s) {
-      body += '    # ===== Step ' + s.step + (s.desc ? ': ' + s.desc : '') + ' =====\n';
+    steps.forEach(function (s, idx) {
+      body += '        # ===== Step ' + (idx + 1) + (s.desc ? ': ' + oneLine(s.desc) : '') + ' =====\n';
       if (s.url && s.url !== currentUrl) {
-        body += '    page.goto(\'' + codeEscape(s.url) + '\')\n';
+        body += '        page.goto(\'' + codeEscape(s.url) + '\')\n';
         currentUrl = s.url;
       }
       var method = s.method || '';
-      var loc = toPlaywrightSelector(s.locator ? s.locator : (s.selector || ''));
+      var ex = toPlaywrightExprPy(s.locator ? s.locator : (s.selector || ''));
       var val = s.value || '';
       switch (method) {
         case 'click':
-          body += '    page.click(\'' + codeEscape(loc) + '\')\n'; break;
+          if (ex) body += '        page.' + ex + '.click()\n';
+          break;
         case 'fill':
         case 'type':
-          body += '    page.fill(\'' + codeEscape(loc) + '\', \'' + codeEscape(val) + '\')\n'; break;
+          if (ex) body += '        page.' + ex + '.fill(\'' + codeEscape(val) + '\')\n';
+          break;
         case 'select':
-          body += '    page.select_option(\'' + codeEscape(loc) + '\', \'' + codeEscape(val) + '\')\n'; break;
+          if (ex) body += '        page.' + ex + '.select_option(\'' + codeEscape(val) + '\')\n';
+          break;
         case 'navigate':
-          body += '    page.goto(\'' + codeEscape(val || s.url) + '\')\n'; break;
+          body += '        page.goto(\'' + codeEscape(val || s.url) + '\')\n';
+          break;
         case 'wait_for_selector':
-          body += '    page.wait_for_selector(\'' + codeEscape(loc) + '\', timeout=5000)\n'; break;
+          if (ex) body += '        page.' + ex + '.wait_for(timeout=5000)\n';
+          break;
         case 'screenshot':
-          body += '    page.screenshot(path=\'screenshot_step_' + s.step + '.png\')\n'; break;
+          body += '        page.screenshot(path=\'screenshot_step_' + s.step + '.png\')\n';
+          break;
         case 'press':
-          body += '    page.press(\'' + codeEscape(loc) + '\', \'' + codeEscape(val) + '\')\n'; break;
+          body += ex
+            ? '        page.' + ex + '.press(\'' + codeEscape(val) + '\')\n'
+            : '        page.keyboard.press(\'' + codeEscape(val) + '\')\n';
+          break;
         case 'hover':
-          body += '    page.hover(\'' + codeEscape(loc) + '\')\n'; break;
+          if (ex) body += '        page.' + ex + '.hover()\n';
+          break;
         case 'check':
-          body += '    page.check(\'' + codeEscape(loc) + '\')\n'; break;
+          if (ex) body += '        page.' + ex + '.check()\n';
+          break;
         case 'uncheck':
-          body += '    page.uncheck(\'' + codeEscape(loc) + '\')\n'; break;
+          if (ex) body += '        page.' + ex + '.uncheck()\n';
+          break;
         default:
-          if (loc) {
-            if (val) body += '    page.fill(\'' + codeEscape(loc) + '\', \'' + codeEscape(val) + '\')\n';
-            else body += '    page.click(\'' + codeEscape(loc) + '\')\n';
+          if (ex) {
+            if (val) body += '        page.' + ex + '.fill(\'' + codeEscape(val) + '\')\n';
+            else body += '        page.' + ex + '.click()\n';
           }
           break;
       }
@@ -170,7 +242,9 @@
     generatePlaywrightCode: generatePlaywrightCode,
     generatePythonCode: generatePythonCode,
     generateJsonCode: generateJsonCode,
-    toPlaywrightSelector: toPlaywrightSelector,
-    codeEscape: codeEscape
+    toPlaywrightExpr: toPlaywrightExpr,
+    toPlaywrightExprPy: toPlaywrightExprPy,
+    codeEscape: codeEscape,
+    oneLine: oneLine
   };
 })(window);

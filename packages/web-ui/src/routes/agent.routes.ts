@@ -684,6 +684,7 @@ const HIT_JS_SRC = String.raw`([x,y])=>{
     type:el.getAttribute('type')||'',
     placeholder:el.getAttribute('placeholder')||'',
     title:el.getAttribute('title')||'',
+    alt:el.getAttribute('alt')||'',
     aria_label:el.getAttribute('aria-label')||'',
     data_testid:el.getAttribute('data-testid')||'',
     selector:cssPath(el),

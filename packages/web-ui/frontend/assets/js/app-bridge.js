@@ -109,30 +109,35 @@
       document.querySelector("#page-task-history .tasktable").style.display = isList ? "block" : "none";
       if (isList) document.getElementById("th-tbody").innerHTML = renderHistoryRows(list);
       else document.getElementById("th-cards").innerHTML = renderHistoryCards(list);
+      syncBatchSel("th-tbody");
     } else if (key === "reports") {
       document.getElementById("rpt-cards").style.display = isList ? "none" : "grid";
       document.querySelector("#page-reports .card").style.display = isList ? "block" : "none";
       if (isList) document.getElementById("rpt-tbody").innerHTML = renderHistoryRows(list);
       else document.getElementById("rpt-cards").innerHTML = renderHistoryCards(list);
+      syncBatchSel("rpt-tbody");
     } else if (key === "plans") {
       document.getElementById("plan-grid").style.display = isList ? "none" : "grid";
       document.querySelector("#page-plans .card").style.display = isList ? "block" : "none";
       if (isList) document.getElementById("plan-tbody").innerHTML = renderPlanRows(list);
       else document.getElementById("plan-grid").innerHTML = renderPlanCards(list);
+      syncBatchSel("plan-tbody");
     } else if (key === "projects") {
       document.getElementById("proj-grid").style.display = isList ? "none" : "grid";
       document.querySelector("#page-projects .card").style.display = isList ? "block" : "none";
       if (isList) document.getElementById("proj-tbody").innerHTML = renderProjRows(list);
       else document.getElementById("proj-grid").innerHTML = renderProjCards(list);
+      syncBatchSel("proj-tbody");
     }
   }
 
   /** 报告行模板（历史管理 / 报告中心共用） */
   function renderHistoryRows(list) {
-    if (!list.length) return `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:36px">暂无报告</td></tr>`;
+    if (!list.length) return `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:36px">暂无报告</td></tr>`;
     const stColor = { success: "var(--success)", failed: "var(--danger)", stopped: "var(--text3)", skipped: "var(--text3)" };
     return list
-      .map((r) => `<tr data-row="${esc(r.id)}">
+      .map((r) => `<tr data-row="${esc(r.id)}" data-id="${esc(r.id)}" data-type="${esc(r.type || "task")}">
+        <td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td>
         <td class="mono">${esc(r.id)}</td>
         <td class="mono">${esc(r.executionId || "-")}</td>
         <td><span class="tag ${r.status === "success" ? "green" : "red"}">${esc(r.status)}</span></td>
@@ -146,10 +151,10 @@
 
   /** 报告操作按钮（行/卡片共用） */
   function reportOps(r) {
-    return `<span class="row-act" title="查看详情" onclick="Bridge.openReport('${esc(r.id)}')">📄</span>
-      <span class="row-act" title="执行监控" onclick="Bridge.openTaskExecMonitor('${esc(r.runId || "")}')">📈</span>
-      <span class="row-act" title="导出 HTML" onclick="Bridge.exportReport(this,'HTML')">📤</span>
-      <span class="row-act" title="删除" onclick="Bridge.deleteReportById('${esc(r.id)}')">🗑</span>`;
+    return `<button class="btn ghost row-btn" onclick="Bridge.openReport('${esc(r.id)}')">查看</button>
+      <button class="btn ghost row-btn" onclick="Bridge.openTaskExecMonitor('${esc(r.runId || "")}')">监控</button>
+      <button class="btn ghost row-btn" onclick="Bridge.exportReport(this,'HTML')">导出</button>
+      <button class="btn danger row-btn" onclick="Bridge.deleteReportById('${esc(r.id)}')">删除</button>`;
   }
 
   /** 报告卡片模板（历史管理 / 报告中心共用） */
@@ -171,12 +176,13 @@
 
   /** 计划行模板 */
   function renderPlanRows(list) {
-    if (!list.length) return `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:36px">暂无测试计划 · 「+ 新建计划」编排任务</td></tr>`;
+    if (!list.length) return `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:36px">暂无测试计划 · 「+ 新建计划」编排任务</td></tr>`;
     const stMap = { idle: ["gray", "空闲"], running: ["cyan", "运行中"], paused: ["amber", "已暂停"], completed: ["green", "已完成"], failed: ["red", "失败"], stopped: ["gray", "已停止"] };
     return list
       .map((p) => {
         const [scls, slabel] = stMap[p.status] || ["gray", p.status];
         return `<tr data-id="${esc(p.id)}">
+          <td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td>
           <td onclick="Bridge.openPlanDrawer('${esc(p.id)}')" style="cursor:pointer"><b>${esc(p.name)}</b></td>
           <td class="mono">${esc(p.cronExpr || "手动")}</td>
           <td><span class="tag ${scls}">${slabel}</span></td>
@@ -184,9 +190,9 @@
           <td style="color:var(--text2)">${esc(p.description || "")}</td>
           <td class="mono">${fmtTime(p.lastRunAt || p.createdAt)}</td>
           <td>
-            <span class="row-act" title="执行" onclick="Bridge.runPlan('${esc(p.id)}')">▶</span>
-            <span class="row-act" title="编辑" onclick="Bridge.openPlanModalForEdit('${esc(p.id)}')">✏️</span>
-            <span class="row-act" title="删除" onclick="Bridge.confirmDelPlan('${esc(p.name)}','${esc(p.id)}')">🗑</span>
+            <button class="btn ghost row-btn" onclick="Bridge.runPlan('${esc(p.id)}')">执行</button>
+            <button class="btn ghost row-btn" onclick="Bridge.openPlanModalForEdit('${esc(p.id)}')">编辑</button>
+            <button class="btn danger row-btn" onclick="Bridge.confirmDelPlan('${esc(p.name)}','${esc(p.id)}')">删除</button>
           </td></tr>`;
       })
       .join("");
@@ -203,7 +209,7 @@
           <div class="p-top"><span class="tag ${scls}">${slabel}</span><b class="p-name">${esc(p.name)}</b><span class="p-cron">${esc(p.cronExpr || "手动")}</span></div>
           <div class="p-desc">${esc(p.description || `${p.taskCount} 个任务 · 串行执行`)}</div>
           <div class="p-meta"><span>${p.taskCount} 个任务</span><span>最近 ${fmtTime(p.lastRunAt || p.createdAt)}</span></div>
-          <div class="p-actions"><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();Bridge.runPlan('${esc(p.id)}')">▶ 执行</button><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();Bridge.openPlanModalForEdit('${esc(p.id)}')">✏️ 编辑</button><button class="btn danger" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();Bridge.confirmDelPlan('${esc(p.name)}','${esc(p.id)}')">🗑</button></div>
+          <div class="p-actions"><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();Bridge.runPlan('${esc(p.id)}')">▶ 执行</button><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();Bridge.openPlanModalForEdit('${esc(p.id)}')">✏️ 编辑</button><button class="btn danger" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();Bridge.confirmDelPlan('${esc(p.name)}','${esc(p.id)}')">删除</button></div>
         </div>`;
       })
       .join("");
@@ -211,7 +217,7 @@
 
   /** 项目行模板 */
   function renderProjRows(list) {
-    if (!list.length) return `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:36px">暂无录制项目 · 「新建录制」创建第一个项目</td></tr>`;
+    if (!list.length) return `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:36px">暂无录制项目 · 「新建录制」创建第一个项目</td></tr>`;
     const typeLabel = { ai: "AI 录制", browser: "浏览器录制" };
     const statusMap = { ready: ["green", "就绪"], draft: ["amber", "草稿"], archived: ["gray", "归档"] };
     return list
@@ -219,18 +225,18 @@
         const [scls, slabel] = statusMap[p.status] || ["gray", p.status];
         const t = typeLabel[p.type] || p.type;
         return `<tr data-id="${esc(p.id)}">
+          <td><input type="checkbox" class="row-check" style="accent-color:var(--primary)"></td>
           <td onclick="Bridge.openProject('${esc(p.id)}')" style="cursor:pointer"><b>${esc(p.name)}</b></td>
           <td>${esc(t)}</td>
           <td><span class="tag ${scls}">${slabel}</span></td>
           <td class="mono">${p.stepsCount ?? 0}</td>
           <td class="mono">${fmtTime(p.createdAt)}</td>
           <td>
-            <span class="row-act" title="启动录制" onclick="Bridge.startRecord('${esc(p.id)}')">▶</span>
-            <span class="row-act" title="创建任务" onclick="Bridge.createTaskFromProject('${esc(p.id)}')">🧪</span>
-            <span class="row-act" title="录制视频" onclick="Bridge.recordVideo('${esc(p.id)}')">🎬</span>
-            <span class="row-act" title="历史" onclick="Bridge.openProjectHistory('${esc(p.id)}')">📄</span>
-            <span class="row-act" title="编辑" onclick="Bridge.openProjModal('${esc(p.id)}')">✏️</span>
-            <span class="row-act" title="删除" onclick="Bridge.confirmDelProj('${esc(p.name)}','${esc(p.id)}')">🗑</span>
+            <button class="btn primary row-btn" onclick="Bridge.startRecord('${esc(p.id)}')">启动录制</button>
+            <button class="btn ghost row-btn" onclick="Bridge.openRecHistory('${esc(p.id)}')">历史录制</button>
+            <button class="btn ghost row-btn" onclick="Bridge.openLatestDebug('${esc(p.id)}')">脚本调试</button>
+            <button class="btn ghost row-btn" onclick="Bridge.openProjModal('${esc(p.id)}')">编辑</button>
+            <button class="btn danger row-btn" onclick="Bridge.confirmDelProj('${esc(p.name)}','${esc(p.id)}')">删除</button>
           </td></tr>`;
       })
       .join("");
@@ -249,7 +255,7 @@
           <div class="top"><span class="proj-ico" style="background:var(--tag-${isAi ? "ai" : "br"}-bg);color:var(--tag-${isAi ? "ai" : "br"}-tx)">${isAi ? "✦" : "🌐"}</span><span class="name">${esc(p.name)}</span><span class="tag ${scls}" style="margin-left:auto">${slabel}</span></div>
           <div class="desc">${esc(p.description || typeLabel[p.type] + "项目")}</div>
           <div class="meta"><span class="mono">${fmtTime(p.createdAt).slice(5, 10)}</span> · <span>${typeLabel[p.type]}</span> · <span>${p.stepsCount ?? 0} 步</span></div>
-          <div class="actions"><button class="btn primary" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();Bridge.startRecord('${esc(p.id)}')">▶ 启动</button><button class="btn" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();Bridge.createTaskFromProject('${esc(p.id)}')">🧪 任务</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();Bridge.recordVideo('${esc(p.id)}')">🎬</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();Bridge.openProjModal('${esc(p.id)}')">编辑</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();Bridge.openProjectHistory('${esc(p.id)}')">历史${p.sessionCount && p.sessionCount > 0 ? `(${p.sessionCount})` : ""}</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();Bridge.confirmDelProj('${esc(p.name)}','${esc(p.id)}')">删除</button></div></div>`;
+          <div class="actions"><button class="btn primary" style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();Bridge.startRecord('${esc(p.id)}')">启动录制</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();Bridge.openRecHistory('${esc(p.id)}')">历史录制</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();Bridge.openLatestDebug('${esc(p.id)}')">脚本调试</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();Bridge.openProjModal('${esc(p.id)}')">编辑</button><button class="btn ghost" style="padding:5px 8px" onclick="event.stopPropagation();Bridge.confirmDelProj('${esc(p.name)}','${esc(p.id)}')">删除</button></div></div>`;
       })
       .join("");
   }
@@ -403,9 +409,11 @@
       });
       if (!data.list.length) {
         tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:36px">暂无任务 · 点击「新建任务」创建第一个测试任务</td></tr>`;
+        syncBatchSel("task-tbody");
         return;
       }
       tbody.innerHTML = renderTaskRows(data.list);
+      syncBatchSel("task-tbody");
       // 看板视图：真实任务按状态分组渲染
       renderBoard(data.list);
       // 筛选计数
@@ -437,11 +445,11 @@
           <td class="mono">${esc(t.browserType)}</td>
           <td class="mono">${t.lastRunAt ? fmtTime(t.lastRunAt).slice(5, 16) : "未执行"}</td>
           <td>
-            <span class="row-act" title="查看详情" onclick="Bridge.openTaskDetail('${esc(t.id)}','${esc(t.name)}')">👁</span>
-            <span class="row-edit" title="编辑任务" onclick="Bridge.editTaskFromDrawer()">✏️</span>
-            <span class="row-act" title="脚本调试" onclick="Bridge.dwOpenTaskScript('${esc(t.id)}','${esc(t.name)}')">🔧</span>
-            <span class="row-act" title="执行" onclick="Bridge.runTask('${esc(t.id)}')">▶</span>
-            <span class="row-act" title="历史管理" onclick="Bridge.openTaskHistory('${esc(t.id)}','${esc(t.name)}')">📄</span>
+            <button class="btn ghost row-btn" onclick="Bridge.openTaskDetail('${esc(t.id)}','${esc(t.name)}')">详情</button>
+            <button class="btn ghost row-btn" onclick="Bridge.editTaskFromDrawer()">编辑</button>
+            <button class="btn ghost row-btn" onclick="Bridge.dwOpenTaskScript('${esc(t.id)}','${esc(t.name)}')">调试</button>
+            <button class="btn ghost row-btn" onclick="Bridge.runTask('${esc(t.id)}')">执行</button>
+            <button class="btn ghost row-btn" onclick="Bridge.openTaskHistory('${esc(t.id)}','${esc(t.name)}')">历史</button>
           </td></tr>`
       )
       .join("");
@@ -914,31 +922,135 @@
     loadTasks();
   }
 
-  /** 批量删除选中任务（确认后逐个 DELETE） */
-  function batchDeleteTasks() {
-    const ids = getCheckedTaskIds();
+  /** 勾选任务 id 集合 */
+  function getCheckedTaskIds() {
+    return getCheckedIds("task-tbody");
+  }
+
+  /** 勾选 id 集合（通用：行勾选框 → 所在行 data-id） */
+  function getCheckedIds(tbodyId) {
+    const ids = [];
+    document.querySelectorAll(`#${tbodyId} .row-check:checked`).forEach((cb) => {
+      const tr = cb.closest("tr");
+      if (tr?.dataset?.id) ids.push(tr.dataset.id);
+    });
+    return ids;
+  }
+
+  /** 批量删除通用入口：确认弹窗 → confirmOk(batchDel) 逐个 DELETE（单个失败继续） */
+  function batchDelete({ tbodyId, label, endpoint, warning, reload }) {
+    const ids = getCheckedIds(tbodyId);
     if (!ids.length) {
-      window.toast?.("请先勾选任务", "");
+      window.toast?.("请先勾选", "");
       return;
     }
-    window.__batchDelIds = ids;
+    window.__batchDel = { ids, label, endpoint, reload };
     document.getElementById("confirm-title").textContent = "确认批量删除";
     document.getElementById("confirm-msg").innerHTML =
-      `确定删除选中的 <b style="color:var(--text)">${ids.length}</b> 个测试任务？<br>将删除任务脚本、资源、执行历史与报告，且不可恢复。`;
+      `确定删除选中的 <b style="color:var(--text)">${ids.length}</b> 个${label}？<br>${warning}`;
     document.getElementById("confirm-ok-btn").textContent = "确认删除";
     window.__confirmType = "batchDel";
     document.getElementById("confirm-mask")?.classList.add("show");
     document.getElementById("confirm-modal")?.classList.add("show");
   }
 
-  /** 勾选任务 id 集合 */
-  function getCheckedTaskIds() {
-    const ids = [];
-    document.querySelectorAll("#task-tbody .row-check:checked").forEach((cb) => {
-      const tr = cb.closest("tr");
-      if (tr?.dataset?.id) ids.push(tr.dataset.id);
+  /** 批量删除选中任务（确认后逐个 DELETE） */
+  function batchDeleteTasks() {
+    batchDelete({
+      tbodyId: "task-tbody",
+      label: "测试任务",
+      endpoint: (id) => `/api/tasks/${id}`,
+      warning: "将删除任务脚本、资源、执行历史与报告，且不可恢复。",
+      reload: () => {
+        loadTasks();
+        loadDashboard();
+      },
     });
-    return ids;
+  }
+
+  /** 批量删除选中计划（执行中的计划后端拒绝，逐个跳过） */
+  function batchDeletePlans() {
+    batchDelete({
+      tbodyId: "plan-tbody",
+      label: "测试计划",
+      endpoint: (id) => `/api/plans/${id}`,
+      warning: "将删除计划及全部执行历史，且不可恢复；执行中的计划会被跳过。",
+      reload: () => {
+        loadPlans();
+        loadDashboard();
+      },
+    });
+  }
+
+  /** 批量删除报告（报告中心 / 任务历史两处共用，按当前所在页取勾选） */
+  function batchDeleteReports() {
+    const inHistory = document.getElementById("page-task-history")?.classList.contains("active");
+    batchDelete({
+      tbodyId: inHistory ? "th-tbody" : "rpt-tbody",
+      label: "测试报告",
+      endpoint: (id) => `/api/reports/${id}`,
+      warning: "将删除报告记录，且不可恢复；任务与计划不受影响。",
+      reload: () => {
+        if (inHistory && window.__thTaskId) loadTaskHistory(window.__thTaskId, window.__thTaskName);
+        else loadReports();
+        loadDashboard();
+      },
+    });
+  }
+
+  /** 批量删除录制项目（含运行中任务的项目后端拒绝，逐个跳过） */
+  function batchDeleteProjects() {
+    batchDelete({
+      tbodyId: "proj-tbody",
+      label: "录制项目",
+      endpoint: (id) => `/api/projects/${id}`,
+      warning: "将删除项目及其全部关联任务、执行历史与报告，且不可恢复；执行中的任务会被跳过。",
+      reload: () => {
+        loadProjects();
+        loadDashboard();
+      },
+    });
+  }
+
+  // ===== 列表批量选择（任务/计划/报告/历史/项目 统一：全选 + 已选计数 + 三态） =====
+  const SEL_SCOPES = [
+    { all: "check-all", count: "sel-count", tbody: "task-tbody" },
+    { all: "plan-check-all", count: "plan-sel-count", tbody: "plan-tbody" },
+    { all: "rpt-check-all", count: "rpt-sel-count", tbody: "rpt-tbody" },
+    { all: "th-check-all", count: "th-sel-count", tbody: "th-tbody" },
+    { all: "proj-check-all", count: "proj-sel-count", tbody: "proj-tbody" },
+  ];
+  /** 同步某列表的「已选 N 项」与全选框三态（列表重渲染后勾选清零，也调它复位） */
+  function syncBatchSel(tbodyId) {
+    const scope = SEL_SCOPES.find((s) => s.tbody === tbodyId);
+    if (!scope) return;
+    const boxes = document.querySelectorAll(`#${scope.tbody} .row-check`);
+    const checked = document.querySelectorAll(`#${scope.tbody} .row-check:checked`);
+    const cnt = document.getElementById(scope.count);
+    if (cnt) cnt.textContent = String(checked.length);
+    const all = document.getElementById(scope.all);
+    if (all) {
+      all.checked = boxes.length > 0 && checked.length === boxes.length;
+      all.indeterminate = checked.length > 0 && checked.length < boxes.length;
+    }
+  }
+  function initBatchSel() {
+    SEL_SCOPES.forEach(({ all, tbody }) => {
+      const allEl = document.getElementById(all);
+      if (!allEl) return;
+      allEl.addEventListener("change", () => {
+        document.querySelectorAll(`#${tbody} .row-check`).forEach((c) => (c.checked = allEl.checked));
+        syncBatchSel(tbody);
+      });
+    });
+    // 行勾选框随列表重渲染重建 → 用事件委托保证计数始终生效
+    document.addEventListener("change", (e) => {
+      const cb = e.target;
+      if (!(cb instanceof HTMLInputElement) || !cb.classList.contains("row-check")) return;
+      const tr = cb.closest("tr");
+      const tbody = tr?.parentElement;
+      if (tbody?.id) syncBatchSel(tbody.id);
+    });
   }
 
   /** 任务筛选（状态） */
@@ -962,6 +1074,7 @@
       if (data.total === 0) {
         tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:36px">无匹配任务</td></tr>`;
       }
+      syncBatchSel("task-tbody");
     } catch (e) { /* pass */ }
   }
 
@@ -1388,7 +1501,7 @@
         setTimeout(() => {
           const frame = document.getElementById("embed-browser");
           if (frame?.contentWindow) {
-            frame.contentWindow.postMessage({ type: "autotest.prefill", url: p.startUrl }, "*");
+            frame.contentWindow.postMessage({ type: "autotest.prefill", url: p.startUrl, projectId }, "*");
           }
         }, 1200);
         window.toast?.("已进入浏览器录制", p.startUrl || p.name);
@@ -1467,6 +1580,244 @@
     }
   }
 
+  // ==================== 历史录制（列表页）与脚本调试入口 ====================
+
+  /** 行「历史录制」：进入历史录制列表页并定位到该项目 */
+  async function openRecHistory(projectId) {
+    window.__recHistProjectId = projectId;
+    window.go?.("page-rec-history", "record", { projectId });
+    await recHistInit();
+    await recHistLoad();
+  }
+
+  /** 历史录制页：项目下拉初始化（保持当前选中） */
+  async function recHistInit() {
+    const sel = document.getElementById("rec-hist-project");
+    if (!sel) return;
+    try {
+      const data = await api("/api/projects?page=1&pageSize=100");
+      const prev = sel.value || window.__recHistProjectId || "";
+      sel.innerHTML = (data.list || [])
+        .map((p) => `<option value="${esc(p.id)}" data-type="${esc(p.type)}" data-url="${esc(p.startUrl || "")}">${esc(p.name)}</option>`)
+        .join("");
+      let target = prev;
+      if (!target) {
+        // 侧边栏直达等无显式上下文 → 预选最近一次录制会话所属项目，
+        // 否则默认停在首个项目，刚「结束并保存」的会话会被误认为没进历史
+        try {
+          const latest = (await api("/api/inspect/sessions")).find((s) => s.project_id);
+          if (latest) target = String(latest.project_id);
+        } catch { /* pass */ }
+      }
+      if (target && (data.list || []).some((p) => p.id === target)) sel.value = target;
+      window.__recHistProjectId = sel.value || null;
+    } catch (e) {
+      window.toast?.("项目列表加载失败", e.message);
+    }
+  }
+
+  /** 历史录制页分页状态（项目切换重置；删除后留在当前页收敛） */
+  const recHistPager = { page: 1, pageSize: 10 };
+
+  /** 历史录制页：加载所选项目的录制会话列表（浏览器 inspect 会话 + AI 会话） */
+  async function recHistLoad(targetPage) {
+    const sel = document.getElementById("rec-hist-project");
+    const tbody = document.getElementById("rec-hist-tbody");
+    if (!sel || !tbody) return;
+    // 显式传页码（翻页）；未传（项目切换/刷新/删除后重载）沿用当前页
+    if (typeof targetPage === "number") recHistPager.page = targetPage;
+    const opt = sel.selectedOptions?.[0];
+    const projectId = sel.value;
+    if (window.__recHistProjectId !== projectId) recHistPager.page = 1; // 项目切换 → 回第 1 页
+    window.__recHistProjectId = projectId;
+    const pType = opt?.getAttribute("data-type") || "browser";
+    const startUrl = opt?.getAttribute("data-url") || "";
+    const prefix = startUrl.replace(/\/$/, "").split("#")[0];
+    const match = (u) => !prefix || String(u || "").startsWith(prefix);
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:36px">加载中…</td></tr>`;
+    try {
+      const items = [];
+      if (pType === "ai") {
+        const all = await api("/api/sessions");
+        for (const s of Array.isArray(all) ? all : []) {
+          if (match(s.start_url)) {
+            items.push({
+              id: s.session_id,
+              kind: "ai",
+              url: s.start_url || "-",
+              steps: s.step_count ?? 0,
+              alive: false,
+              time: Number(s.updated_at || s.created_at || 0),
+            });
+          }
+        }
+      } else {
+        const all = await api("/api/inspect/sessions");
+        for (const s of Array.isArray(all) ? all : []) {
+          // 优先按会话绑定的 project_id（录制项目页发起时写入）；旧会话无绑定 → 起始 URL 前缀匹配兜底
+          const bound = s.project_id ? String(s.project_id) === projectId : null;
+          if (bound === true || (bound === null && match(s.start_url))) {
+            items.push({
+              id: s.sid,
+              kind: "inspect",
+              url: s.start_url || "-",
+              steps: s.step_count ?? 0,
+              alive: !!s.alive,
+              time: Number(s.updated_at || s.created_at || 0),
+            });
+          }
+        }
+      }
+      items.sort((a, b) => b.time - a.time);
+      const pagerEl = document.getElementById("rec-hist-pager");
+      if (!items.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:36px">该项目暂无录制会话 · 点右上「+ 新建录制」开始</td></tr>`;
+        if (pagerEl) pagerEl.innerHTML = "";
+        return;
+      }
+      // 客户端分页：会话总量有限（本地录制数据），全量拉取后切片
+      const totalPages = Math.max(1, Math.ceil(items.length / recHistPager.pageSize));
+      recHistPager.page = Math.min(Math.max(1, recHistPager.page), totalPages);
+      const pageItems = items.slice((recHistPager.page - 1) * recHistPager.pageSize, recHistPager.page * recHistPager.pageSize);
+      tbody.innerHTML = pageItems
+        .map(
+          (s) => `<tr>
+          <td class="mono" title="${esc(s.id)}">${esc(String(s.id).slice(0, 16))}…</td>
+          <td>${s.kind === "ai" ? "AI 会话" : "浏览器录制"}</td>
+          <td class="mono" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.url)}">${esc(s.url)}</td>
+          <td class="mono">${s.steps}</td>
+          <td>${s.alive ? '<span class="tag cyan">进行中</span>' : '<span class="tag gray">已结束</span>'}</td>
+          <td class="mono">${s.time ? fmtTime(s.time * 1000) : "-"}</td>
+          <td>
+            <button class="btn ghost row-btn" onclick="Bridge.openSessionDebug('${esc(s.id)}','${esc(s.kind)}','${esc(projectId)}')">脚本调试</button>
+            <button class="btn ghost row-btn" onclick="Bridge.openSessionHistory('${esc(s.id)}','${esc(s.kind)}')">查看</button>
+            <button class="btn danger row-btn" onclick="Bridge.recHistDelete('${esc(s.id)}','${esc(s.kind)}')">删除</button>
+          </td></tr>`,
+        )
+        .join("");
+      renderPager(pagerEl, {
+        page: recHistPager.page,
+        pageSize: recHistPager.pageSize,
+        total: items.length,
+        onPage: (n) => recHistLoad(n),
+      });
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:36px">加载失败：${esc(e.message)}</td></tr>`;
+    }
+  }
+
+  /** 历史录制页「+ 新建录制」：对所选项目启动一次新录制（增） */
+  async function recHistNew() {
+    const pid = document.getElementById("rec-hist-project")?.value || window.__recHistProjectId;
+    if (!pid) {
+      window.toast?.("请先选择项目", "");
+      return;
+    }
+    await startRecord(pid);
+  }
+
+  /** 历史录制页「删除」：删除录制会话（删） */
+  async function recHistDelete(sessionId, kind) {
+    if (kind === "ai") {
+      window.toast?.("AI 会话不支持在此删除", "可在 AI 录制页管理");
+      return;
+    }
+    if (!window.confirm?.("确认删除该录制会话？删除后时间线不可恢复。")) return;
+    try {
+      await api(`/api/inspect/sessions/${sessionId}`, { method: "DELETE" });
+      window.toast?.("录制会话已删除");
+      await recHistLoad();
+    } catch (e) {
+      window.toast?.("删除失败", e.message);
+    }
+  }
+
+  /** 行「脚本调试」：进入该项目最近一次录制的脚本调试（无会话则调试项目脚本） */
+  async function openLatestDebug(projectId) {
+    let latest = null;
+    try {
+      const opt = await api(`/api/projects/${projectId}`);
+      if ((opt.type || "browser") !== "ai") {
+        const prefix = String(opt.startUrl || "").replace(/\/$/, "").split("#")[0];
+        const all = await api("/api/inspect/sessions");
+        latest = (Array.isArray(all) ? all : [])
+          .filter((s) => !prefix || String(s.start_url || "").startsWith(prefix))
+          .sort((a, b) => Number(b.updated_at || 0) - Number(a.updated_at || 0))[0];
+      }
+    } catch {
+      /* 项目信息失败 → 退回项目工作台 */
+    }
+    if (latest) {
+      await openSessionDebug(latest.sid, "inspect", projectId);
+    } else {
+      await enterProjectDebug(projectId);
+      window.toast?.("未找到录制会话", "已打开项目脚本调试（由项目步骤生成）");
+    }
+  }
+
+  /** 会话级脚本调试：把该次录制生成的脚本装入调试工作台（改） */
+  async function openSessionDebug(sessionId, kind, projectId) {
+    if (kind === "ai") {
+      await enterProjectDebug(projectId);
+      return;
+    }
+    try {
+      const d = await api(`/api/inspect/session/${sessionId}/timeline`);
+      const steps = d.steps || [];
+      const script = steps.length ? generateSessionScript(steps, d.start_url || "") : "// 该会话无录制步骤";
+      await enterProjectDebug(projectId, { sessionId });
+      const codeEl = document.getElementById(dwQ("dw-code"));
+      if (codeEl) codeEl.value = script;
+      const titleEl = document.getElementById(dwQ("dw-code-title"));
+      if (titleEl) titleEl.textContent = `会话脚本 ${String(sessionId).slice(0, 8)}…`;
+      dw.filePath = null; // 会话脚本未落盘：保存需另存到项目
+      dwLog("info", `已载入录制会话脚本（${steps.length} 步）· 可编辑后保存到项目`);
+      // 右侧步骤栏 + 时间线 Tab：完整呈现录制步骤与截图（与录制时间线保持一致）
+      const mapped = steps.map((s) => ({
+        method: s.method,
+        // click_at 的坐标在会话数据是顶层 sx/sy，单步执行读取 params.x/y
+        params:
+          s.method === "click_at"
+            ? { x: Number(s.sx ?? 0), y: Number(s.sy ?? 0), value: s.value ?? "" }
+            : { value: s.value ?? "" },
+        locator: { primary: String(s.locator || "") },
+        desc: s.desc || s.method,
+        url: s.url || "",
+        screenshot: s.screenshot || "",
+        success: s.success !== false,
+      }));
+      dw.sessionSteps = mapped;
+      dw.steps = mapped;
+      dwRenderSessionSteps(mapped);
+      dwTlSeedFromSteps(mapped);
+    } catch (e) {
+      window.toast?.("会话脚本加载失败", e.message);
+    }
+  }
+
+  /** 进入项目脚本调试工作台：切到 page-debug 并选中该项目 */
+  async function enterProjectDebug(projectId, extraQs) {
+    // URL 带工程 id（会话脚本调试再带 sessionId）：刷新/分享深链可恢复上下文
+    window.go?.("page-debug", "record", { projectId: projectId || "", ...(extraQs || {}) });
+    dw.dom = "record";
+    // 首次进入时 go() 会触发 dwInit(record)（异步）→ 等项目下拉就绪再操作，避免互相覆盖
+    for (let i = 0; i < 20; i++) {
+      const sel = document.getElementById(dwQ("dw-project"));
+      if (sel?.options.length) break;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    await new Promise((r) => setTimeout(r, 600)); // 等自动加载落定（与 dwOpenTaskScript 同模式）
+    const sel = document.getElementById(dwQ("dw-project"));
+    if (sel) {
+      sel.value = projectId;
+      if (sel.value !== projectId) sel.selectedIndex = 0; // 项目不在列表（已删?）→ 回退首个
+      dw.projectId = sel.value;
+    }
+    await dwLoadFiles();
+    dwSwitchTab("code");
+  }
+
+
   /** 计划暂停/恢复（真实 API） */
   async function togglePlanPause() {
     const planId = window.__currentPlanId;
@@ -1509,7 +1860,7 @@
     }
   }
 
-  /** 打开会话历史详情（时间线 / JSON 协议 / 生成脚本） */
+  /** 打开会话历史详情（步骤 / 时间线 / 脚本 三栏视图） */
   async function openSessionHistory(sessionId, kind) {
     try {
       let steps = [];
@@ -1535,89 +1886,173 @@
       }
       window.__sessionView = { sessionId, kind, steps, startUrl };
 
-      // 填充抽屉头部
-      document.getElementById("sess-d-title").textContent = kind === "ai" ? "AI 录制会话" : "浏览器录制会话";
-      document.getElementById("sess-d-id").textContent = sessionId.slice(0, 16) + "…";
-      document.getElementById("sess-d-url").textContent = startUrl || "-";
-      const stEl = document.getElementById("sess-d-status");
-      if (stEl) {
-        stEl.innerHTML = alive ? '<span class="tag cyan">进行中</span>' : '<span class="tag gray">已结束</span>';
-      }
-      document.getElementById("sess-d-steps").textContent = String(steps.length);
+      // 头部：标题 / 状态 / 元信息
+      document.getElementById("rs-title").textContent = kind === "ai" ? "AI 录制会话" : "浏览器录制会话";
+      const stEl = document.getElementById("rs-status");
+      if (stEl) stEl.innerHTML = alive ? '<span class="tag cyan">进行中</span>' : '<span class="tag gray">已结束</span>';
+      document.getElementById("rs-meta").textContent =
+        `${sessionId} · ${startUrl || "-"} · ${steps.length} 步`;
 
-      // 时间线视图
-      const tl = document.getElementById("sess-timeline");
-      if (tl) {
-        tl.innerHTML = steps.length
+      // 栏 1：步骤（紧凑列表，点击同步时间线）
+      const stepEl = document.getElementById("rs-steps");
+      const countEl = document.getElementById("rs-steps-count");
+      if (countEl) countEl.textContent = steps.length ? `${steps.length} 步` : "";
+      if (stepEl) {
+        stepEl.innerHTML = steps.length
           ? steps
               .map(
-                (s) => `<div class="pick-item">
-                  <span class="p-order">${s.step ?? "-"}</span>
+                (s, i) => `<div class="pick-item${i === 0 ? " on" : ""}" id="rs-step-${i}" style="cursor:pointer" onclick="Bridge.rsFocusStep(${i})">
+                  <span class="p-order">${s.step ?? i + 1}</span>
                   <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.desc || s.method)}</span>
-                  <span class="mono" style="color:${s.success === false ? "var(--danger)" : "var(--text3)"};font-size:11px">${esc(s.method)}</span>
-                </div>`
+                  <span class="rs-method${s.success === false ? " bad" : ""}">${esc(s.method)}</span>
+                </div>`,
               )
               .join("")
           : `<div style="color:var(--text3);font-size:12px;padding:6px 2px">该会话无步骤</div>`;
       }
-      // JSON 协议视图
-      const jsonEl = document.getElementById("sess-json");
-      if (jsonEl) {
-        jsonEl.textContent = JSON.stringify(
-          steps.map((s) => ({ step: s.step, method: s.method, desc: s.desc, locator: s.locator, value: s.value, url: s.url })),
-          null,
-          2,
-        );
+
+      // 栏 2：时间线（详情卡片 + 截图）
+      const tl = document.getElementById("rs-timeline");
+      if (tl) {
+        tl.innerHTML = steps.length
+          ? steps
+              .map((s, i) => {
+                const meta = [
+                  s.url ? ["URL", s.url] : null,
+                  s.locator ? ["定位器", s.locator] : null,
+                  s.value !== "" && s.value != null ? ["值", s.value] : null,
+                ].filter(Boolean)
+                  .map(([k, v]) => `<div><b>${k}</b> ${esc(String(v).slice(0, 220))}</div>`)
+                  .join("");
+                const shot = s.screenshot
+                  ? `<img class="rs-shot" src="${s.screenshot}" onclick="window.open(this.src,'_blank')" alt="step ${i + 1}">`
+                  : "";
+                return `<div class="rs-card${i === 0 ? " on" : ""}" id="rs-card-${i}">
+                  <div class="rs-head">
+                    <span class="p-order">${s.step ?? i + 1}</span>
+                    <span class="rs-desc">${esc(s.desc || s.method)}</span>
+                    <span class="rs-method${s.success === false ? " bad" : ""}">${esc(s.method)}</span>
+                  </div>
+                  ${meta ? `<div class="rs-meta">${meta}</div>` : ""}
+                  ${shot}
+                </div>`;
+              })
+              .join("")
+          : `<div style="color:var(--text3);font-size:12px;padding:6px 2px">该会话无步骤</div>`;
       }
-      // 生成脚本视图（生成器在后端：临时用前端简化版同构输出）
-      const scriptEl = document.getElementById("sess-script");
+
+      // 栏 3：脚本
+      const scriptEl = document.getElementById("rs-script");
       if (scriptEl) {
         scriptEl.textContent = steps.length ? generateSessionScript(steps, startUrl) : "// 无步骤";
       }
-      // 默认 tab 复位
-      switchSessTab("timeline");
-      document.getElementById("sess-mask")?.classList.add("show");
-      document.getElementById("sess-drawer")?.classList.add("show");
+      window.go?.("rec-session", "record");
     } catch (e) {
       window.toast?.("会话详情加载失败", e.message);
     }
   }
 
+  /** 步骤列表 ↔ 时间线卡片联动定位 */
+  function rsFocusStep(idx) {
+    document.querySelectorAll("#rs-steps .pick-item").forEach((el) => el.classList.remove("on"));
+    document.getElementById(`rs-step-${idx}`)?.classList.add("on");
+    document.querySelectorAll("#rs-timeline .rs-card").forEach((el) => el.classList.remove("on"));
+    const card = document.getElementById(`rs-card-${idx}`);
+    if (card) {
+      card.classList.add("on");
+      card.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  /** 从会话视图进入脚本调试（把该会话脚本装入调试工作台） */
+  async function openSessionDebugFromView() {
+    const view = window.__sessionView;
+    if (!view) return;
+    const projectId = window.__recHistProjectId || null;
+    await openSessionDebug(view.sessionId, view.kind, projectId);
+  }
+
   /** 会话时间线 → Playwright JS（与后端 script-generator 同构） */
+  /** 字符串字面量转义：单引号/反斜杠转义，换行转 \n 序列（保留原语义） */
+  function toPwLit(v) {
+    return String(v ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\r?\n/g, "\\n");
+  }
+
+  /** DSL 值去两侧成对包裹引号；字面 \n 序列归一为空格（Playwright 文本匹配做空白归一化） */
+  function pwUnquote(v) {
+    let t = String(v ?? "").trim();
+    if (t.length >= 2 && ((t[0] === '"' && t[t.length - 1] === '"') || (t[0] === "'" && t[t.length - 1] === "'"))) {
+      t = t.slice(1, -1).trim();
+    }
+    return t.replace(/\\n/g, " ");
+  }
+
+  /**
+   * 平台定位 DSL → Playwright 原生定位表达式（不含 page. 锚，链式段以 . 连接）。
+   * 定位规则（高→低）：getByRole > getByText > getByLabel > getByPlaceholder
+   * > getByAltText > getByTitle > getByTestId > CSS > XPath（最后考虑）。
+   */
+  function toPwExpr(loc) {
+    const raw = String(loc ?? "").trim();
+    if (!raw) return "";
+    const jsLit = (v) => `'${toPwLit(v)}'`;
+    const seg = (s) => {
+      let m;
+      if ((m = s.match(/^get_by_role=([^,]+),\s*([\s\S]+)$/))) {
+        const role = pwUnquote(m[1]).trim();
+        let name = pwUnquote(m[2]);
+        const tm = name.match(/^title=["']?([\s\S]*?)["']?$/);
+        if (tm) return `getByTitle(${jsLit(pwUnquote(tm[1]))})`;
+        const nm = name.match(/^name=["']?([\s\S]*?)["']?$/);
+        if (nm) name = pwUnquote(nm[1]);
+        return name ? `getByRole('${role}', { name: ${jsLit(name)} })` : `getByRole('${role}')`;
+      }
+      if ((m = s.match(/^get_by_role=(.+)$/))) return `getByRole('${pwUnquote(m[1]).trim()}')`;
+      if ((m = s.match(/^get_by_text=([\s\S]+)$/))) return `getByText(${jsLit(pwUnquote(m[1]))})`;
+      if ((m = s.match(/^get_by_label=([\s\S]+)$/))) return `getByLabel(${jsLit(pwUnquote(m[1]))})`;
+      if ((m = s.match(/^get_by_placeholder=([\s\S]+)$/))) return `getByPlaceholder(${jsLit(pwUnquote(m[1]))})`;
+      if ((m = s.match(/^get_by_alt_text=([\s\S]+)$/))) return `getByAltText(${jsLit(pwUnquote(m[1]))})`;
+      if ((m = s.match(/^get_by_title=([\s\S]+)$/))) return `getByTitle(${jsLit(pwUnquote(m[1]))})`;
+      if ((m = s.match(/^get_by_test_id=([\s\S]+)$/))) return `getByTestId(${jsLit(pwUnquote(m[1]))})`;
+      if ((m = s.match(/^nth\s*=\s*(\d+)$/))) return `nth(${m[1]})`;
+      const sel = /^\/(?!\/)/.test(s) ? `xpath=${s}` : s;
+      return `locator(${jsLit(sel)})`;
+    };
+    return raw.split(" >> ").map((p) => seg(p.trim())).join(".");
+  }
+
   function generateSessionScript(steps, startUrl) {
+    // desc 可能含换行（多行页面标题/文本）：注释压成单行，避免生成非法 JS
+    const oneLine = (v) => String(v ?? "").replace(/\s*\r?\n\s*/g, " ").trim();
+    // 起始地址：startUrl 缺失（录制时未产生开场导航步骤）→ 取时间线首个带 url 的步骤（录制起始页）
+    const initUrl = startUrl || steps.map((s) => s.url || "").find(Boolean) || "";
     let out = "const { chromium } = require('playwright');\n\n(async () => {\n  const browser = await chromium.launch({ headless: false });\n  const page = await browser.newPage();\n\n";
-    if (startUrl) out += `  await page.goto('${startUrl}');\n`;
+    if (initUrl) out += `  await page.goto('${toPwLit(initUrl)}');\n`;
+    // 双通道录制的时间线 step 号可能重复/乱序 → 按输出顺序重编
+    let stepSeq = 0;
     for (const s of steps) {
       const loc = String(s.locator || "");
       const val = String(s.value || "");
-      out += `  // Step ${s.step ?? ""}: ${s.desc || s.method}\n`;
+      const ex = toPwExpr(loc);
+      stepSeq++;
+      out += `  // Step ${stepSeq}: ${oneLine(s.desc || s.method)}\n`;
       if (s.method === "click_at") {
         const x = Number((s.params || {}).x ?? 0);
         const y = Number((s.params || {}).y ?? 0);
-        out += `  await page.mouse.click(${x}, ${y});
-`;
-      } else if (/fill|input|type/.test(s.method) && loc) out += `  await page.fill('${loc}', '${val}');
-`;
-      else if (/click/.test(s.method)) out += `  await page.click('${loc || val}');\n`;
-      else if (/navigate|open_url|goto/.test(s.method)) out += `  await page.goto('${val || s.url || ""}');\n`;
-      else if (loc) out += val ? `  await page.fill('${loc}', '${val}');\n` : `  await page.click('${loc}');\n`;
+        out += `  await page.mouse.click(${x}, ${y});\n`;
+      } else if (/fill|input|type/.test(s.method) && ex) out += `  await page.${ex}.fill('${toPwLit(val)}');\n`;
+      else if (/click/.test(s.method)) out += ex ? `  await page.${ex}.click();\n` : (val ? `  await page.${toPwExpr(val)}.click();\n` : "");
+      else if (/navigate|open_url|goto/.test(s.method)) out += `  await page.goto('${toPwLit(val || s.url || "")}');\n`;
+      else if (ex) out += val ? `  await page.${ex}.fill('${toPwLit(val)}');\n` : `  await page.${ex}.click();\n`;
     }
     out += "  await browser.close();\n})();\n";
     return out;
   }
 
   /** 会话详情 Tab 切换 */
-  function switchSessTab(tab) {
-    document.querySelectorAll("#sess-tabs span").forEach((s) => s.classList.toggle("on", s.dataset.tab === tab));
-    ["timeline", "json", "script"].forEach((t) => {
-      const el = document.getElementById(`sess-tab-${t}`);
-      if (el) el.style.display = t === tab ? "block" : "none";
-    });
-  }
-
   /** 复制会话生成脚本 */
   async function copySessScript() {
-    const el = document.getElementById("sess-script");
+    const el = document.getElementById("rs-script");
     if (!el?.textContent) return;
     try {
       await navigator.clipboard.writeText(el.textContent);
@@ -1665,7 +2100,7 @@
       });
       await api(`/api/projects/${created.id}/regenerate-script`, { method: "POST", body: "{}" });
       window.toast?.("已保存为录制项目", name);
-      closeSessDrawer();
+      window.go?.("rec-history", "record");
       await loadProjects();
     } catch (e) {
       window.toast?.("保存失败", e.message);
@@ -2245,6 +2680,9 @@
     runTask,
     batchRunTasks,
     batchDeleteTasks,
+    batchDeletePlans,
+    batchDeleteReports,
+    batchDeleteProjects,
     filterTasks,
     editTaskFromDrawer,
     stopTaskFromDrawer,
@@ -2292,6 +2730,7 @@
     dwInit,
     dwSetMode,
     dwLoadFiles,
+    dwToggleShots,
     dwOpenFile,
     dwGenFromSteps,
     dwSaveCode,
@@ -2308,8 +2747,16 @@
     dwRunAllSteps,
     dwCopyCode,
     openProjectHistory,
+    openRecHistory,
+    recHistInit,
+    recHistLoad,
+    recHistDelete,
+    recHistNew,
+    openLatestDebug,
+    openSessionDebug,
     openSessionHistory,
-    switchSessTab,
+    rsFocusStep,
+    openSessionDebugFromView,
     copySessScript,
     copyProjScript,
     saveSessAsProject,
@@ -2331,6 +2778,14 @@
   ready(() => {
     // URL 上下文恢复钩子（app.html hashchange/DOMContentLoaded 调用）
     window.__restorePageParams = restorePageParams;
+    // inspect 录制页「⚡ 脚本调试」→ 嵌入 iframe postMessage 通知父页 SPA 跳转工作台
+    window.addEventListener("message", (ev) => {
+      const d = ev.data;
+      if (!d || d.type !== "autotest.sessionDebug" || !d.sid) return;
+      openSessionDebug(String(d.sid), "inspect", d.projectId ? String(d.projectId) : null);
+    });
+    // 列表批量选择：全选/已选计数/三态（任务·计划·报告·历史·项目）
+    initBatchSel();
     // 全量加载 + 向导项目下拉预填
     window.Bridge.reload();
     ensureWizardProjectSelect().catch(() => {});
@@ -2365,18 +2820,21 @@
           window.toast?.("删除失败", e.message);
         }
       }
-      else if (type === "batchDel" && window.__batchDelIds) {
-        const ids = window.__batchDelIds;
-        let ok = 0;
-        for (const tid of ids) {
+      else if (type === "batchDel" && window.__batchDel) {
+        const { ids, label, endpoint, reload } = window.__batchDel;
+        let okN = 0;
+        let failN = 0;
+        for (const id of ids) {
           try {
-            await api(`/api/tasks/${tid}`, { method: "DELETE" });
-            ok++;
-          } catch (e) { /* 单个失败继续 */ }
+            await api(endpoint(id), { method: "DELETE" });
+            okN++;
+          } catch (e) {
+            failN++; // 单个失败继续（如执行中的计划/项目会被后端拒绝）
+          }
         }
-        window.__batchDelIds = null;
-        window.toast?.(`已删除 ${ok}/${ids.length} 个任务`, "含脚本/历史/报告");
-        loadTasks();
+        window.__batchDel = null;
+        window.toast?.(`已删除 ${okN}/${ids.length} 个${label}`, failN ? `${failN} 个删除失败（可能执行中）` : "");
+        reload && reload();
       }
       else if (type === "stop") {
         stopMonitor();
@@ -2495,13 +2953,16 @@
       }
     } catch (e) {
       window.toast?.("工作台初始化失败", e.message);
+    } finally {
+      window.__dwInited = true; // 初始化完成标志（等待方不再空转轮询）
     }
   }
 
-  /** 加载文件树 + 步骤（record=项目文件 / task=任务快照） */
+  /** 加载文件树 + 步骤（record=项目文件 / task=任务快照）；用户切换项目时清除会话步骤状态 */
   async function dwLoadFiles() {
     const sel = document.getElementById(dwQ("dw-project"));
     if (!sel?.value) return;
+    if (dw.projectId !== sel.value) dw.sessionSteps = null;
     dw.projectId = sel.value;
     try {
       if (dw.dom === "task") {
@@ -2520,33 +2981,54 @@
       const tree = document.getElementById(dwQ("dw-file-tree"));
       const kindIcon = { script: "📄", resource: "🗂", generated: "⚡" };
       if (tree) {
-        tree.innerHTML = data.files.length
-          ? data.files
-              .map(
-                (f) => `<div style="display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px" class="dw-file" data-path="${esc(f.path)}" onclick="Bridge.dwOpenFile('${esc(f.path)}')">
+        // 截图归组到 screenshots 目录节点（默认折叠），不再与脚本文件平铺混排
+        const imgs = data.files.filter((f) => f.kind === "image");
+        const rest = data.files.filter((f) => f.kind !== "image");
+        const rowHtml = (f) => `<div style="display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px" class="dw-file" data-path="${esc(f.path)}" onclick="Bridge.dwOpenFile('${esc(f.path)}')">
                   <span>${kindIcon[f.kind] || "📄"}</span>
                   <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(f.name)}">${esc(f.name)}</span>
                   <span class="mono" style="color:var(--text3);font-size:10px">${f.size > 1024 ? Math.round(f.size / 1024) + "K" : f.size + "B"}</span>
-                </div>`
-              )
-              .join("")
-          : `<div style="color:var(--text3);font-size:12px;padding:8px 4px">该项目无文件</div>`;
+                </div>`;
+        const imgRowHtml = (f) => `<div style="display:flex;align-items:center;gap:7px;padding:6px 8px 6px 20px;border-radius:6px;cursor:pointer;font-size:12px" title="点击在新标签页查看">
+                  <span>🖼</span>
+                  <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</span>
+                  <span class="mono" style="color:var(--text3);font-size:10px">${f.size > 1024 ? Math.round(f.size / 1024) + "K" : f.size + "B"}</span>
+                  <span style="color:var(--primary);font-size:10px" onclick="window.open('/api/files/${esc(f.path)}','_blank')">↗</span>
+                </div>`;
+        const shotsHtml = imgs.length
+          ? `<div style="display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px;background:var(--input-bg)" onclick="Bridge.dwToggleShots()">
+                  <span>🖼</span><span style="flex:1">screenshots（运行/录制截图）</span>
+                  <span class="mono" style="color:var(--text3);font-size:10px">${imgs.length}</span>
+                  <span id="dw-shots-arrow" style="color:var(--text3);font-size:10px">▸</span>
+                </div>
+                <div id="dw-shots-list" style="display:none;flex-direction:column;gap:1px">${imgs.map(imgRowHtml).join("")}</div>`
+          : "";
+        tree.innerHTML =
+          (rest.length ? rest.map(rowHtml).join("") : `<div style="color:var(--text3);font-size:12px;padding:8px 4px">该项目无文件</div>`) +
+          shotsHtml;
       }
       const cnt = document.getElementById(dwQ("dw-file-count"));
       if (cnt) cnt.textContent = data.files.length ? `(${data.files.length})` : "";
       await dwLoadSteps();
-      // 自动加载第一个文件（项目生成脚本）→ 打开即见脚本
+      // 自动加载第一个文件（项目生成脚本）→ 打开即见脚本（db:// 可编辑版优先，跳过磁盘镜像）
       if (data.files.length && !dw.filePath) {
-        const first = data.files.find((f) => f.kind === "generated") || data.files[0];
-        await dwOpenFile(first.path);
+        const first =
+          data.files.find((f) => f.kind === "generated" && String(f.path).startsWith("db://")) ||
+          data.files.find((f) => f.kind !== "image") ||
+          data.files[0];
+        if (first) await dwOpenFile(first.path);
       }
     } catch (e) {
       window.toast?.("文件树加载失败", e.message);
     }
   }
 
-  /** 打开文件（db:// 虚拟或磁盘） */
+  /** 打开文件（db:// 虚拟或磁盘；图片走 /api/files 放大预览） */
   async function dwOpenFile(filePath) {
+    if (/\.(png|jpe?g|gif|webp)$/i.test(filePath)) {
+      Bridge.dwTlZoomImage(`/api/files/${filePath}`);
+      return;
+    }
     try {
       const data = await api(`/api/debug-workbench/file?path=${encodeURIComponent(filePath)}`);
       const codeEl = document.getElementById(dwQ("dw-code"));
@@ -2675,10 +3157,12 @@
       } else {
         code = code.replace(/headless:\s*true/g, "headless: false").replace(/headless:\s*false/g, "headless: false");
       }
+      // 步骤间隔（ms）：注入脚本 env，autoShot 每步后等待；0=不等待
+      const stepGap = Math.max(0, Number(document.getElementById(dwQ("dw-step-gap"))?.value ?? 0) || 0);
       const resp = await fetch("/api/agent/run-script", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, stepIntervalMs: stepGap }),
       });
       const reader = resp.body.getReader();
       const dec = new TextDecoder();
@@ -2694,7 +3178,35 @@
           if (!data) continue;
           try {
             const evt = JSON.parse(data);
-            if (evt.type === "log") dwLog(evt.level === "error" ? "error" : "info", evt.text);
+            if (evt.type === "step") {
+              // 脚本每步的 @@STEP@@ 标记 → 时间线实时卡片（步骤/描述/定位器/URL/截图）
+              dwTlAdd({
+                kind: "manual",
+                method: evt.method || "step",
+                desc: evt.desc || `步骤 ${evt.step}`,
+                locator: evt.locator || "",
+                url: evt.url || "",
+                success: true,
+                screenshot: evt.screenshot || "",
+              });
+              dwLog("info", `✓ 步骤 ${evt.step} ${evt.desc || evt.method || ""}`);
+              continue;
+            }
+            if (evt.type === "log") {
+              dwLog(evt.level === "error" ? "error" : "info", evt.text);
+              // 关键节点同步进时间线（与执行监控一致：开始/结束留卡片）
+              if (/执行 JavaScript 脚本|JS 脚本执行完成|JS 脚本异常退出/.test(String(evt.text || ""))) {
+                dwTlAdd({
+                  kind: "manual",
+                  method: evt.level === "error" ? "error" : "run",
+                  desc: String(evt.text || ""),
+                  locator: "",
+                  url: "",
+                  success: evt.level !== "error",
+                  screenshot: "",
+                });
+              }
+            }
             if (evt.type === "done") dwLog("ok", "脚本运行结束");
           } catch { /* 忽略非 JSON */ }
         }
@@ -2817,7 +3329,7 @@
     if (tlTab) tlTab.style.display = tab === "timeline" ? "flex" : "none";
   }
 
-  /** 时间线卡片（与录制页 inspect 时间线 step-card 同构） */
+  /** 时间线卡片（与执行监控 execTlCard 同构：状态/描述/方法/定位器/URL/大图截图） */
   function dwTlRenderCard(s) {
     const box = document.getElementById(dwQ("dw-timeline"));
     if (!box) return;
@@ -2830,13 +3342,15 @@
     const t = new Date().toTimeString().slice(0, 8);
     card.innerHTML =
       `<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--input-bg);border-radius:var(--radius);border-left:3px solid ${s.success === false ? "var(--danger)" : s.warning ? "var(--warning, orange)" : "var(--success)"}">` +
-      `<span class="mono" style="color:var(--text3);font-size:10px">${s.step}</span>${st}` +
+      `<span class="mono" style="color:var(--text3);font-size:10px">步骤 ${s.step}</span>${st}` +
       `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.desc || "")}">${esc(s.desc || s.method)}</span>` +
       `<span class="tag ${s.kind === "manual" ? "ai" : "browser"}" style="font-size:10px">${esc(s.method)}</span>` +
+      `<span class="mono" style="color:var(--text3);font-size:10px">${t}</span>` +
       `</div>` +
+      (s.url ? `<div class="mono" style="padding:2px 12px 4px 34px;font-size:10.5px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.url)}">${esc(s.url)}</div>` : "") +
       (s.locator ? `<div class="mono" style="padding:2px 12px 4px 34px;font-size:10.5px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.locator)}</div>` : "") +
       (s.screenshot
-        ? `<img src="${s.screenshot}" alt="步骤截图" style="display:block;width:100%;max-height:150px;object-fit:cover;object-position:top;border-radius:6px;margin:2px 12px 6px;cursor:zoom-in" onclick="Bridge.dwTlZoomImage(this.src)"/>`
+        ? `<img src="${s.screenshot}" alt="步骤截图" style="display:block;width:100%;max-height:420px;object-fit:contain;object-position:left top;border-radius:6px;margin:2px 12px 6px;cursor:zoom-in" onclick="Bridge.dwTlZoomImage(this.src)"/>`
         : "") +
       (s.error ? `<div style="padding:0 12px 6px 34px;font-size:11px;color:var(--danger)">${esc(s.error)}</div>` : "");
     box.appendChild(card);
@@ -2947,8 +3461,24 @@
     if (badge) badge.textContent = "";
   }
 
+  /** 文件树 screenshots 分组折叠/展开 */
+  function dwToggleShots() {
+    const list = document.getElementById(dwQ("dw-shots-list"));
+    const arrow = document.getElementById(dwQ("dw-shots-arrow"));
+    if (!list) return;
+    const open = list.style.display === "none";
+    list.style.display = open ? "flex" : "none";
+    if (arrow) arrow.textContent = open ? "▾" : "▸";
+  }
+
   /** 步骤栏渲染到两个 Tab（代码 Tab 右栏 + 时间线 Tab 右栏共用数据） */
   async function dwLoadSteps() {
+    // 会话脚本载入的录制步骤优先：与录制时间线保持一致（含截图），项目切换时清除回退项目步骤
+    if (dw.sessionSteps) {
+      dw.steps = dw.sessionSteps;
+      dwRenderSessionSteps(dw.sessionSteps);
+      return;
+    }
     if (dw.dom === "task") {
       const msg = `<div style="color:var(--text3);font-size:12px;padding:8px 4px">任务脚本无录制步骤（脚本调试 = 编辑/运行）</div>`;
       for (const id of ["dw-steps", "dw-steps2"]) {
@@ -2972,8 +3502,8 @@
                   <span class="mono" style="color:var(--text3);font-size:10px">${i + 1}</span>
                   <span class="tag ${p.type === "ai" ? "ai" : "browser"}" style="font-size:10px">${esc(s.method)}</span>
                   <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.desc || "")}">${esc(s.desc || s.method)}</span>
-                  <span class="row-act" title="高亮" onclick="Bridge.dwHighlightStep(${i})">🔦</span>
-                  <span class="row-act" title="执行" onclick="Bridge.dwRunStep(${i})">▶</span>
+                  <button class="btn ghost row-btn" onclick="Bridge.dwHighlightStep(${i})">高亮</button>
+                  <button class="btn ghost row-btn" onclick="Bridge.dwRunStep(${i})">执行</button>
                   <span class="dw-st mono" style="font-size:11px"></span>
                 </div>`
               )
@@ -2985,6 +3515,52 @@
       render("dw-steps", "dw-step-count");
       render("dw-steps2", "dw-step-count2");
     } catch (e) { /* 静默 */ }
+  }
+
+  /** 会话录制步骤渲染到两个步骤栏（含截图缩略图；高亮/单步执行与项目步骤同构） */
+  function dwRenderSessionSteps(steps) {
+    const render = (containerId, countId) => {
+      const el = document.getElementById(dwQ(containerId));
+      if (!el) return;
+      el.innerHTML = steps.length
+        ? steps
+            .map(
+              (s, i) => `<div class="dw-step" data-idx="${i}" data-panel="${containerId}" style="display:flex;flex-direction:column;gap:6px;padding:8px 10px;background:var(--input-bg);border-radius:var(--radius);font-size:12px">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span class="mono" style="color:var(--text3);font-size:10px">${i + 1}</span>
+                    <span class="tag browser" style="font-size:10px">${esc(s.method)}</span>
+                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.desc || "")}">${esc(s.desc || s.method)}</span>
+                    <button class="btn ghost row-btn" onclick="Bridge.dwHighlightStep(${i})">高亮</button>
+                    <button class="btn ghost row-btn" onclick="Bridge.dwRunStep(${i})">执行</button>
+                    <span class="dw-st mono" style="font-size:11px"></span>
+                  </div>
+                  ${s.url ? `<div class="mono" style="font-size:10px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.url)}</div>` : ""}
+                  ${s.screenshot ? `<img src="${s.screenshot}" alt="步骤 ${i + 1} 截图" loading="lazy" style="width:100%;max-height:110px;object-fit:cover;object-position:top;border-radius:6px;border:1px solid var(--border);cursor:zoom-in" onclick="Bridge.dwTlZoomImage(this.src)"/>` : ""}
+                </div>`,
+            )
+            .join("")
+        : `<div style="color:var(--text3);font-size:12px;padding:8px 4px">无录制步骤（可由录制页生成）</div>`;
+      const cnt = document.getElementById(countId);
+      if (cnt) cnt.textContent = steps.length ? `(${steps.length})` : "";
+    };
+    render("dw-steps", "dw-step-count");
+    render("dw-steps2", "dw-step-count2");
+  }
+
+  /** 时间线 Tab 预填完整录制步骤（与录制时间线一致）；此后单步执行/运行继续追加 */
+  function dwTlSeedFromSteps(steps) {
+    dwTl.steps = [];
+    const box = document.getElementById(dwQ("dw-timeline"));
+    if (box) box.innerHTML = "";
+    steps.forEach((s, i) => {
+      const card = { ...s, step: i + 1, kind: "record", success: s.success !== false };
+      dwTl.steps.push(card);
+      dwTlRenderCard(card);
+    });
+    const cnt = document.getElementById(dwQ("dw-tl-count"));
+    if (cnt) cnt.textContent = `${dwTl.steps.length} 步`;
+    const badge = document.getElementById(dwQ("dw-tl-badge"));
+    if (badge) badge.textContent = dwTl.steps.length ? `(${dwTl.steps.length})` : "";
   }
 
   /** 单步执行增强：状态同步两个面板 + 时间线记录 */
@@ -3057,12 +3633,14 @@
     }
     dwTlClear();
     dwLog("info", `▶▶ 开始顺序执行 ${dw.steps.length} 步…`);
+    // 步骤间隔：与「▶ 运行」共用同一配置（输入缺省 500ms，0=不等待）
+    const gap = Math.max(0, Number(document.getElementById(dwQ("dw-step-gap"))?.value ?? 500) || 0);
     let okCount = 0;
     for (let i = 0; i < dw.steps.length; i++) {
       await dwRunStep(i);
       const st = document.querySelector(`#dw-steps2 .dw-step[data-idx="${i}"] .dw-st`)?.textContent;
       if (st === "✓") okCount++;
-      await new Promise((r) => setTimeout(r, 300));
+      if (gap > 0 && i < dw.steps.length - 1) await new Promise((r) => setTimeout(r, gap));
     }
     dwLog(okCount === dw.steps.length ? "ok" : "error", `顺序执行完成：${okCount}/${dw.steps.length} 通过`);
     window.toast?.("顺序执行完成", `${okCount}/${dw.steps.length} 步通过`);
@@ -3104,6 +3682,15 @@
             const titleEl = document.getElementById(dwQ("dw-code-title"));
             if (titleEl) titleEl.textContent = `${task.name}.${d.lang}`;
           }
+          // 恢复任务下拉选中（等 dwInit 填充完成）
+          for (let i = 0; i < 20; i++) {
+            const sel = document.getElementById(dwQ("dw-project"));
+            if (sel?.options.length) {
+              if ([...sel.options].some((o) => o.value === params.taskId)) sel.value = params.taskId;
+              break;
+            }
+            await new Promise((r) => setTimeout(r, 250));
+          }
         }
       } else if (key === "task-detail" && params.taskId) {
         const task = await api(`/api/tasks/${params.taskId}`).catch(() => null);
@@ -3111,6 +3698,17 @@
       } else if (key === "task-history" && params.taskId) {
         const task = await api(`/api/tasks/${params.taskId}`).catch(() => null);
         if (task) loadTaskHistory(task.id, task.name);
+      } else if (key === "rec-history") {
+        // 历史录制：恢复项目上下文（projectId 可选，缺省选首个项目）
+        window.__recHistProjectId = params.projectId || null;
+        await recHistInit();
+        await recHistLoad();
+      } else if (key === "debug" && params.sessionId) {
+        // 录制页独立打开时「⚡ 脚本调试」深链：直接装入该会话脚本
+        await openSessionDebug(params.sessionId, "inspect", params.projectId || null);
+      } else if (key === "debug" && params.projectId) {
+        // 脚本调试深链：恢复该工程的工作台上下文
+        await enterProjectDebug(params.projectId);
       } else if (key === "report") {
         // 报告详情：reportId 优先（已打开同报告则跳过），否则按 taskId 查最近报告
         if (params.reportId) {

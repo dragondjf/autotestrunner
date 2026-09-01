@@ -18,6 +18,7 @@ const RECORDER_TEMPLATE = String.raw`(function () {
   if (window.__REC_INIT__) return;           // 同一 document 只初始化一次
   window.__REC_INIT__ = true;
   if (!window.__RECORDED__) window.__RECORDED__ = [];
+  if (!window.__REC_SUPPRESS_UNTIL__) window.__REC_SUPPRESS_UNTIL__ = 0;
   const STRATEGY = __STRATEGY__;
 
   const esc = function (v) {
@@ -174,6 +175,9 @@ const RECORDER_TEMPLATE = String.raw`(function () {
   };
   const emit = function (actionType, el, value, extra) {
     if (window.__REC_PAUSED__) return;
+    // 面板程序化执行回声抑制：后端执行 step/坐标点击等动作前会设置 __REC_SUPPRESS_UNTIL__，
+    // Playwright 的可信事件会触发本录制器，若不入队则同一动作不会在时间线记录两遍。
+    if (window.__REC_SUPPRESS_UNTIL__ && Date.now() < window.__REC_SUPPRESS_UNTIL__) return;
     const candidates = buildCandidates(el);
     const meta = buildMeta(el);
     const act = {

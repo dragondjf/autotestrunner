@@ -45,6 +45,7 @@ const NATIVE_PREFIXES = [
   "get_by_placeholder=",
   "get_by_alt_text=",
   "get_by_title=",
+  "get_by_test_id=",
 ];
 
 // ============================================================
@@ -156,6 +157,7 @@ function normalizeNativeValueSegment(segment: string): string {
     "get_by_placeholder=",
     "get_by_alt_text=",
     "get_by_title=",
+    "get_by_test_id=",
   ]) {
     if (coerced.startsWith(prefix)) {
       return prefix + stripWrappingQuotes(coerced.slice(prefix.length));
@@ -320,6 +322,9 @@ function resolveRootLocator(scope: AnyScope, sel: string): PwLocator {
   if (sel.startsWith("get_by_title=")) {
     return (scope as any).getByTitle(stripWrappingQuotes(sel.slice("get_by_title=".length)));
   }
+  if (sel.startsWith("get_by_test_id=")) {
+    return (scope as any).getByTestId(stripWrappingQuotes(sel.slice("get_by_test_id=".length)));
+  }
   return scope.locator(sel);
 }
 
@@ -346,6 +351,9 @@ function resolveChildLocator(parentLoc: PwLocator, childSel: string): PwLocator 
   }
   if (childSel.startsWith("get_by_title=")) {
     return parentLoc.getByTitle(stripWrappingQuotes(childSel.slice("get_by_title=".length)));
+  }
+  if (childSel.startsWith("get_by_test_id=")) {
+    return parentLoc.getByTestId(stripWrappingQuotes(childSel.slice("get_by_test_id=".length)));
   }
   return parentLoc.locator(childSel);
 }

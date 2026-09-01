@@ -150,7 +150,7 @@
     chosenLocator = '';
     global.InsLive.hideSelect();
     setHint('hover 预览画面查看元素，点击选中后配置动作');
-    el('ins-cands').innerHTML = '<div class="ins-hint">点击预览选中元素后，这里列出候选定位器（按稳定性排序）</div>';
+    el('ins-cands').innerHTML = '<div class="ins-hint">点击预览选中元素后，这里列出候选定位器（按定位规则优先级排序）</div>';
     el('ins-cand-hint').textContent = '';
     el('ins-select-options').innerHTML = '';
     refreshButtons();
@@ -197,7 +197,7 @@
   function renderCandidates(cands, elInfo) {
     var box = el('ins-cands');
     box.innerHTML = '';
-    el('ins-cand-hint').textContent = cands.length ? '(' + cands.length + ' 条, 按稳定性排序)' : '';
+    el('ins-cand-hint').textContent = cands.length ? '(' + cands.length + ' 条, 按定位规则优先级排序)' : '';
     if (!cands.length) {
       box.innerHTML = '<div class="ins-hint">未能为该元素生成候选定位器（元素无 id/文本/属性特征）</div>';
       return;
@@ -208,7 +208,8 @@
       row.className = 'ins-cand' + ((i === 0 && !chosenLocator) || c.locator === chosenLocator ? ' sel' : '');
       row.dataset.locator = c.locator;
       var cntTxt = typeof c.count === 'number'
-        ? c.count + '匹配/' + (c.visible || 0) + '可见'
+        ? c.count + '匹配/' + (c.visible || 0) + '可见' +
+          (c.count > 1 && c.index >= 0 ? ' ·命中第' + (c.index + 1) + '个' : '')
         : '…';
       var cntCls = typeof c.count === 'number'
         ? 'cnt ' + (c.count === 1 && c.visible ? 'ok' : (c.count ? '' : 'bad'))
@@ -246,14 +247,7 @@
           cnt.textContent = r.count + '匹配/' + (r.visible || 0) + '可见';
           cnt.className = 'cnt ' + (r.count === 1 && r.visible ? 'ok' : (r.count ? '' : 'bad'));
           st.textContent = stars(r);
-          if (r.count === 1 && r.visible && chosenLocator !== cands[i].locator &&
-              !row.querySelector('input').checked) {
-            chosenLocator = cands[i].locator;
-            box.querySelectorAll('.ins-cand').forEach(function (rr) { rr.classList.remove('sel'); });
-            row.classList.add('sel');
-            row.querySelector('input').checked = true;
-            refreshButtons();
-          }
+          // 候选已由后端保证「选中的都是命中元素」并按优先级排序 → 保持首选行，不再自动切换
         });
       });
     }
@@ -344,8 +338,16 @@
     }
     setExecuting(true);
     setStatus('执行中…', '');
+    // 多元素命中：带上选中候选的命中序号/匹配数，后端为定位器附加 >> nth=N
+    var cinfo = null;
+    var cands = (selected && selected.candidates) || [];
+    for (var ci = 0; ci < cands.length; ci++) {
+      if (cands[ci].locator === locator) { cinfo = cands[ci]; break; }
+    }
     global.INSAPP.act('step', {
-      method: m, locator: locator, value: value, el_text: elText
+      method: m, locator: locator, value: value, el_text: elText,
+      el_index: cinfo && cinfo.index != null ? cinfo.index : -1,
+      el_count: cinfo ? (cinfo.count || 0) : 0
     }).then(afterExec).catch(onErr);
   }
 

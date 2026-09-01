@@ -1,0 +1,307 @@
+name: Package Green Version
+
+on:
+  push:
+    tags:
+      - 'v*'              # 推送 v1.0.0, v2.1.3 等标签时触发
+  workflow_dispatch:      # 支持手动触发
+
+jobs:
+  build:
+    name: Package for ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win-x64
+            node_arch: x64
+            node_platform: win
+            package_name: myapp-win-x64
+          - os: ubuntu-latest
+            platform: linux-x64
+            node_arch: x64
+            node_platform: linux
+            package_name: myapp-linux-x64
+          - os: ubuntu-24.04-arm
+            platform: linux-arm64
+            node_arch: arm64
+            node_platform: linux
+            package_name: myapp-linux-arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers (chromium only)
+        run: npx playwright install chromium
+
+      - name: Build project
+        run: npm run build
+
+      - name: Prepare package directory
+        shell: bash
+        run: |
+          mkdir -p package
+          cp -r dist package/
+          cp -r node_modules package/
+          cp package.json package/
+          cp .env.example package/ || true
+
+          # 拷贝 Playwright 浏览器缓存
+          if [ "${{ matrix.platform }}" = "win-x64" ]; then
+            PLAYWRIGHT_CACHE="$USERPROFILE/.cache/ms-playwright"
+          else
+            PLAYWRIGHT_CACHE="$HOME/.cache/ms-playwright"
+          fi
+
+          if [ -d "$PLAYWRIGHT_CACHE" ]; then
+            mkdir -p package/.cache/ms-playwright
+            cp -r $PLAYWRIGHT_CACHE/* package/.cache/ms-playwright/
+          fi
+
+      - name: Download Node.js 22 binary
+        shell: bash
+        run: |
+          NODE_VERSION="22.9.0"
+          NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${NODE_PLATFORM}-${NODE_ARCH}"
+
+          if [ "${{ matrix.platform }}" = "win-x64" ]; then
+            curl -L -o node.zip "${NODE_URL}.zip"
+            unzip node.zip -d package/
+            mv package/node-v${NODE_VERSION}-${NODE_PLATFORM}-${NODE_ARCH} package/node
+          else
+            curl -L -o node.tar.gz "${NODE_URL}.tar.gz"
+            tar -xzf node.tar.gz -C package/
+            mv package/node-v${NODE_VERSION}-${NODE_PLATFORM}-${NODE_ARCH} package/node
+          fi
+        env:
+          NODE_PLATFORM: ${{ matrix.node_platform }}
+          NODE_ARCH: ${{ matrix.node_arch }}
+
+      - name: Create scripts (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          # 创建 start.sh
+          cat > package/start.sh << 'EOF'
+          #!/bin/bash
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          export NODE_PATH="$SCRIPT_DIR/node_modules"
+          export PLAYWRIGHT_BROWSERS_PATH="$SCRIPT_DIR/.cache/ms-playwright"
+          PID_FILE="$SCRIPT_DIR/app.pid"
+          LOG_FILE="$SCRIPT_DIR/app.log"
+
+          if [ -f "$PID_FILE" ]; then
+              OLD_PID=$(cat "$PID_FILE")
+              if kill -0 "$OLD_PID" 2>/dev/null; then
+                  echo "[WARN] 应用已在运行 (PID: $OLD_PID)"
+                  echo "如需重启请先执行 ./stop.sh"
+                  exit 1
+              else
+                  rm -f "$PID_FILE"
+              fi
+          fi
+
+          echo "[INFO] 正在启动应用..."
+          nohup "$SCRIPT_DIR/node/bin/node" "$SCRIPT_DIR/dist/index.js" "$@" > "$LOG_FILE" 2>&1 &
+          NEW_PID=$!
+          echo "$NEW_PID" > "$PID_FILE"
+          echo "[OK] 应用已启动，PID: $NEW_PID"
+          echo "[INFO] 日志文件: $LOG_FILE"
+          echo "[INFO] 停止服务请运行: ./stop.sh"
+          EOF
+          chmod +x package/start.sh
+
+          # 创建 stop.sh
+          cat > package/stop.sh << 'EOF'
+          #!/bin/bash
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          PID_FILE="$SCRIPT_DIR/app.pid"
+          PORT="${PORT:-3000}"
+
+          echo "========================================"
+          echo "  Stopping MyApp Service"
+          echo "========================================"
+          echo
+
+          if [ -f "$PID_FILE" ]; then
+              PID=$(cat "$PID_FILE")
+              echo "[INFO] 找到 PID 文件: $PID"
+              if kill -0 "$PID" 2>/dev/null; then
+                  echo "[INFO] 正在终止进程 $PID ..."
+                  kill "$PID"
+                  sleep 2
+                  if kill -0 "$PID" 2>/dev/null; then
+                      echo "[WARN] 进程未响应，强制终止..."
+                      kill -9 "$PID"
+                  fi
+                  echo "[OK] 进程已终止"
+                  rm -f "$PID_FILE"
+              else
+                  echo "[WARN] 进程 $PID 已不存在"
+                  rm -f "$PID_FILE"
+              fi
+          fi
+
+          echo "[INFO] 尝试通过端口 $PORT 查找进程..."
+          PIDS=$(lsof -ti :$PORT 2>/dev/null || true)
+          if [ -n "$PIDS" ]; then
+              for PID in $PIDS; do
+                  echo "[INFO] 找到占用端口 $PORT 的进程: $PID"
+                  kill "$PID" 2>/dev/null || kill -9 "$PID" 2>/dev/null
+                  echo "[OK] 进程 $PID 已终止"
+              done
+          else
+              echo "[WARN] 未找到运行中的应用"
+          fi
+          echo
+          EOF
+          chmod +x package/stop.sh
+
+      - name: Create scripts (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          # 创建 start.bat
+          cat > package/start.bat << 'EOF'
+          @echo off
+          set SCRIPT_DIR=%~dp0
+          set NODE_PATH=%SCRIPT_DIR%node_modules
+          set PLAYWRIGHT_BROWSERS_PATH=%SCRIPT_DIR%.cache\ms-playwright
+          set PID_FILE=%SCRIPT_DIR%app.pid
+          set LOG_FILE=%SCRIPT_DIR%app.log
+
+          if exist "%PID_FILE%" (
+              set /p OLD_PID=<"%PID_FILE%"
+              echo [WARN] 应用已在运行 (PID: !OLD_PID!)
+              echo 如需重启请先执行 stop.bat
+              exit /b 1
+          )
+
+          echo [INFO] 正在启动应用...
+          start /B "%SCRIPT_DIR%node\node.exe" "%SCRIPT_DIR%dist\index.js" %* > "%LOG_FILE%" 2>&1
+
+          REM 获取新启动的进程 PID
+          powershell -Command "Get-Process -Name node | Where-Object { $_.StartTime -gt (Get-Date).AddMinutes(-1) } | Select-Object -First 1 | ForEach-Object { $_.Id }" > "%PID_FILE%"
+
+          echo [OK] 应用已启动
+          echo [INFO] 日志文件: %LOG_FILE%
+          echo [INFO] 停止服务请运行: stop.bat
+          EOF
+
+          # 创建 stop.bat
+          cat > package/stop.bat << 'EOF'
+          @echo off
+          set SCRIPT_DIR=%~dp0
+          set PID_FILE=%SCRIPT_DIR%app.pid
+          set PORT=3000
+
+          echo ========================================
+          echo   Stopping MyApp Service
+          echo ========================================
+          echo.
+
+          if exist "%PID_FILE%" (
+              set /p PID=<"%PID_FILE%"
+              echo [INFO] 找到 PID 文件: !PID!
+
+              tasklist /FI "PID eq !PID!" 2>NUL | find /I "!PID!" >NUL
+              if errorlevel 1 (
+                  echo [WARN] 进程 !PID! 已不存在
+                  del "%PID_FILE%"
+                  goto :kill_by_port
+              )
+
+              echo [INFO] 正在终止进程 !PID! ...
+              taskkill /PID !PID! /T /F >NUL 2>&1
+              if errorlevel 1 (
+                  echo [ERROR] 无法终止进程 !PID!
+              ) else (
+                  echo [OK] 进程 !PID! 已终止
+                  del "%PID_FILE%"
+                  goto :end
+              )
+          )
+
+          :kill_by_port
+          echo [INFO] 尝试通过端口 %PORT% 查找进程...
+          for /f "tokens=5" %%a in ('netstat -ano ^| find ":%PORT%" ^| find "LISTENING"') do (
+              echo [INFO] 找到占用端口 %PORT% 的进程: %%a
+              taskkill /PID %%a /T /F >NUL 2>&1
+              if errorlevel 1 (
+                  echo [ERROR] 无法终止进程 %%a
+              ) else (
+                  echo [OK] 进程 %%a 已终止
+              )
+              goto :end
+          )
+
+          echo [WARN] 未找到运行中的应用
+
+          :end
+          echo.
+          pause
+          EOF
+
+      - name: Create README
+        shell: bash
+        run: |
+          cat > package/README.txt << 'EOF'
+          ========================================
+          MyApp - 绿色便携版
+          ========================================
+
+          版本: Node.js 22
+          包含: Playwright Chromium 浏览器
+
+          📦 目录结构
+          -----------
+          node/           - Node.js 22 运行时
+          dist/           - 项目构建产物
+          node_modules/   - 项目依赖
+          .cache/         - Playwright 浏览器缓存
+
+          🚀 使用方法
+          -----------
+          Windows: 双击 start.bat
+          Linux:   ./start.sh
+
+          🛑 停止服务
+          -----------
+          Windows: 双击 stop.bat
+          Linux:   ./stop.sh
+
+          📝 传递参数
+          -----------
+          start.bat --port 3000
+          ./start.sh --port 3000
+
+          ⚙️ 配置文件
+          -----------
+          如需修改配置，请编辑 .env 文件
+
+          📋 日志文件
+          -----------
+          app.log - 应用运行日志
+          EOF
+
+      - name: Package into ZIP
+        shell: bash
+        run: |
+          cd package
+          zip -r ../${{ matrix.package_name }}.zip *
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.package_name }}
+          path: ${{ matrix.package_name }}.zip

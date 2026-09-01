@@ -8,7 +8,8 @@
   var state = {
     sid: null,
     alive: false,
-    currentUrl: ''
+    currentUrl: '',
+    projectId: null   // 所属录制项目（录制项目页「启动录制」带入，随会话绑定落盘）
   };
 
   function el(id) { return document.getElementById(id); }
@@ -62,7 +63,7 @@
     fetch('/api/inspect/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ start_url: url })
+      body: JSON.stringify({ start_url: url, project_id: state.projectId || undefined })
     }).then(function (r) {
       if (!r.ok) return r.json().then(function (d) { throw new Error(d.detail || ('HTTP ' + r.status)); });
       return r.json();
@@ -75,6 +76,7 @@
       setStatus('● 已连接', 'on');
       ['ins-back', 'ins-fwd', 'ins-reload'].forEach(function (id) { el(id).disabled = false; });
       el('ins-end').disabled = false;
+      el('ins-debug-btn').disabled = false;
       InsTimeline.reset();
       InsLocator.sessionReady();
       InsLive.start();
@@ -118,8 +120,8 @@
 
   function endSession() {
     if (!state.sid) return;
-    act('close').then(function () {
-      afterClose('已结束并保存时间线');
+    act('close').then(function (d) {
+      afterClose(closeToast(d));
       refreshHistory();
     }).catch(function (err) {
       // 会话可能已被 GC/替换
@@ -139,6 +141,17 @@
       clearSessionUrl();   // 会话结束 → 回 /inspect 根路径
       refreshHistory();
     }
+  }
+
+  /** 结束保存文案：绑定项目的会话已生成脚本/快照（后端 syncRecordingToProject），否则仅时间线 */
+  function closeToast(d) {
+    var s = d && d.sync;
+    if (s && s.projectName) {
+      var t = '已保存并生成脚本（' + (s.steps || 0) + ' 步）→ 项目「' + s.projectName + '」';
+      if (s.tasksRefreshed > 0) t += '，补齐 ' + s.tasksRefreshed + ' 个任务快照';
+      return t;
+    }
+    return '已结束并保存时间线';
   }
 
   function adoptAliveSession(sid, steps) {
@@ -251,6 +264,8 @@
 
   function openHistory(item) {
     actGet('/api/inspect/session/' + item.sid + '/timeline').then(function (d) {
+      state.projectId = d.project_id || null;  // 会话归属项目（调试跳转带上下文）
+      el('ins-debug-btn').disabled = false;    // 有会话即可进脚本调试（含只读回放）
       if (d.alive) {
         adoptAliveSession(item.sid, d.steps || []);
         InsTimeline.toast('已接续存活会话', 'ok');
@@ -263,20 +278,42 @@
     });
   }
 
+  /** 脚本调试：把当前会话生成的脚本装入调试工作台（嵌入=通知父页 SPA 跳转；独立=新开管理台） */
+  function goSessionDebug() {
+    if (!state.sid) return;
+    var payload = { type: 'autotest.sessionDebug', sid: state.sid, projectId: state.projectId || '' };
+    try {
+      if (window.self !== window.top && window.parent) {
+        window.parent.postMessage(payload, '*');
+        InsTimeline.toast('已进入脚本调试工作台', 'ok');
+        return;
+      }
+    } catch (e) { /* 跨域受限走新开 */ }
+    window.open('/app#/debug?sessionId=' + encodeURIComponent(state.sid) +
+      (state.projectId ? '&projectId=' + encodeURIComponent(state.projectId) : ''));
+  }
+
   // ---------- URL 深链同步(与 index.html /session/{sid} 同机制) ----------
   function sidFromUrl() {
     var m = location.pathname.match(/^\/inspect\/([^\/]+)\/?$/);
     return m ? decodeURIComponent(m[1]) : null;
   }
+  function projectIdFromUrl() {
+    try { return new URLSearchParams(location.search).get('projectId') || null; } catch (e) { return null; }
+  }
   function setUrlForSid(sid) {
-    var target = '/inspect/' + encodeURIComponent(sid);
-    if (location.pathname !== target) history.pushState({ sid: sid }, '', target);
+    // URL 带会话 id + 工程 id（工程上下文随深链恢复，脚本调试跳转不丢归属）
+    var target = '/inspect/' + encodeURIComponent(sid) +
+      (state.projectId ? '?projectId=' + encodeURIComponent(state.projectId) : '');
+    if (location.pathname + location.search !== target) history.pushState({ sid: sid }, '', target);
   }
   function clearSessionUrl() {
     if (location.pathname !== '/inspect') history.pushState({}, '', '/inspect');
   }
   function initFromUrl() {
     var sid = sidFromUrl();
+    var pid = projectIdFromUrl();
+    if (pid && !state.projectId) state.projectId = pid;  // 深链工程上下文（新建会话亦绑定该工程）
     if (sid) openHistory({ sid: sid });
     refreshHistory();
   }
@@ -395,6 +432,7 @@
     if (booted) return;
     booted = true;
     el('ins-open').addEventListener('click', openSession);
+    el('ins-debug-btn').addEventListener('click', goSessionDebug);
     el('ins-url').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') openSession();
     });
@@ -440,29 +478,31 @@
 
   document.addEventListener('DOMContentLoaded', boot);
   if (document.readyState !== 'loading') boot();
-})(window);
 
-
-// ---------- 管理台嵌入预填（/app 卡片「启动」跳转时接收 URL） ----------
-(function () {
-  try {
-    // 嵌入场景：读取 sessionStorage 预填
-    if (window.self !== window.top) {
-      var raw = sessionStorage.getItem('autotest.prefill');
-      if (raw) {
-        var pf = JSON.parse(raw);
-        var u = document.getElementById('ins-url');
-        if (u && pf.url) { u.value = pf.url; }
-        sessionStorage.removeItem('autotest.prefill');
-      }
-    }
-  } catch (e) { /* 访问受限忽略 */ }
-  // postMessage 预填（管理台跳转后延迟送达）
-  window.addEventListener('message', function (ev) {
-    if (!ev.data || ev.data.type !== 'autotest.prefill') return;
+  // ---------- 管理台嵌入预填（/app 卡片「启动录制」跳转时接收 URL + 项目绑定） ----------
+  // 注意：必须在主闭包内（state 不可外部访问）
+  (function () {
     try {
-      var u = document.getElementById('ins-url');
-      if (u && ev.data.url) u.value = ev.data.url;
-    } catch (e) { /* pass */ }
-  });
-})();
+      // 嵌入场景：读取 sessionStorage 预填
+      if (window.self !== window.top) {
+        var raw = sessionStorage.getItem('autotest.prefill');
+        if (raw) {
+          var pf = JSON.parse(raw);
+          var u = document.getElementById('ins-url');
+          if (u && pf.url) { u.value = pf.url; }
+          if (pf.projectId) { state.projectId = pf.projectId; }  // 录制会话与项目绑定
+          sessionStorage.removeItem('autotest.prefill');
+        }
+      }
+    } catch (e) { /* 访问受限忽略 */ }
+    // postMessage 预填（管理台跳转后延迟送达）
+    window.addEventListener('message', function (ev) {
+      if (!ev.data || ev.data.type !== 'autotest.prefill') return;
+      try {
+        var u = document.getElementById('ins-url');
+        if (u && ev.data.url) u.value = ev.data.url;
+        if (ev.data.projectId) state.projectId = ev.data.projectId;
+      } catch (e) { /* pass */ }
+    });
+  })();
+})(window);

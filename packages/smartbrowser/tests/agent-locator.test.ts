@@ -53,8 +53,8 @@ describe("actionMadeProgress（agent_locator.py:71）", () => {
   });
 });
 
-describe("buildCandidatesFromElement（agent_locator.py:110）", () => {
-  it("优先级顺序：testid > #id > role > text > name > placeholder > aria > selector", () => {
+describe("buildCandidatesFromElement（定位规则：role>text>label>placeholder>alt>title>testid>CSS>XPath）", () => {
+  it("优先级顺序：role > text > label > testid > #id > name > selector > xpath", () => {
     const cands = buildCandidatesFromElement({
       tag: "button",
       id: "btn-login",
@@ -66,21 +66,36 @@ describe("buildCandidatesFromElement（agent_locator.py:110）", () => {
       aria_label: "登录",
       selector: "button.x",
     });
-    expect(cands[0]).toBe('[data-testid="login-btn"]');
-    expect(cands).toContain("#btn-login");
+    expect(cands[0]).toBe("get_by_role=button, 登录系统");
+    expect(cands[1]).toBe("get_by_text=登录系统");
+    expect(cands[2]).toBe("get_by_label=登录");
+    expect(cands).toContain("get_by_test_id=login-btn");
+    // getByTestId（原生定位）先于 CSS #id 与 XPath
+    expect(cands.indexOf("get_by_test_id=login-btn")).toBeLessThan(cands.indexOf("#btn-login"));
+    expect(cands.indexOf("#btn-login")).toBeLessThan(cands.indexOf("//button[@id='btn-login']"));
     expect(cands).toContain("//button[@id='btn-login']");
-    expect(cands).toContain("get_by_role=button, 登录系统");
-    expect(cands).toContain("get_by_text=登录系统");
     expect(cands).toContain('button[name="user"]');
     // placeholder 候选仅限 input/textarea（button 不生成）
     expect(cands).not.toContain("get_by_placeholder=请输入");
-    expect(cands).toContain("get_by_label=登录");
     expect(cands).toContain("button.x");
   });
   it("input 的 placeholder 候选", () => {
     expect(buildCandidatesFromElement({ tag: "input", placeholder: "请输入" })).toContain(
       "get_by_placeholder=请输入",
     );
+  });
+  it("img 的 alt 候选先于 title/testid/CSS", () => {
+    const cands = buildCandidatesFromElement({
+      tag: "img",
+      alt: "logo",
+      title: "首页",
+      data_testid: "top-logo",
+      id: "logo-img",
+    });
+    expect(cands[0]).toBe("get_by_alt_text=logo");
+    expect(cands).toContain("get_by_title=首页");
+    expect(cands.indexOf("get_by_title=首页")).toBeLessThan(cands.indexOf("get_by_test_id=top-logo"));
+    expect(cands.indexOf("get_by_test_id=top-logo")).toBeLessThan(cands.indexOf("#logo-img"));
   });
   it("短词黑名单默认排除 text 候选", () => {
     const cands = buildCandidatesFromElement({ tag: "button", text: "登录" });
@@ -187,18 +202,18 @@ describe("pickStableLocator / refineAgentStepLocator", () => {
     { tag: "input", id: "username", placeholder: "请输入账号", aria_label: "账号" },
     { tag: "button", id: "loginBtn", text: "登录系统", role: "button" },
   ];
-  it("click_ele 优选 #id 候选首位", () => {
+  it("click_ele 优选 get_by_role 候选首位", () => {
     const r = pickStableLocator({ method: "click_ele", desc: "点击「登录系统」按钮", params: { locator: "get_by_text=登录" } }, els);
-    expect(r).toBe("#loginBtn");
+    expect(r).toBe("get_by_role=button, 登录系统");
   });
   it("fill_value 语义词优先", () => {
     const r = pickStableLocator({ method: "fill_value", desc: "输入账号", params: { locator: "#el-id-3-4" } }, els);
-    expect(r).toBe("get_by_placeholder=请输入账号");
+    expect(r).toBe("get_by_label=账号");
   });
   it("refineAgentStepLocator 就地替换弱定位器", () => {
     const step: Record<string, unknown> = { method: "click_ele", desc: "点击「登录系统」按钮", params: { locator: "get_by_text=登录" } };
     refineAgentStepLocator(step, els);
-    expect((step["params"] as Record<string, unknown>)["locator"]).toBe("#loginBtn");
+    expect((step["params"] as Record<string, unknown>)["locator"]).toBe("get_by_role=button, 登录系统");
   });
   it("非目标 method 不替换", () => {
     const step: Record<string, unknown> = { method: "press_key", params: { locator: "x" } };

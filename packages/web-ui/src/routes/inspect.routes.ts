@@ -6,6 +6,7 @@
  * 仅复用纯技术资产: UiMcpAgentExplorer 浏览器底座、_execute_step 兜底、CDP 帧流方案。
  */
 import http from "node:http";
+import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { Router, type Response } from "express";
@@ -26,9 +27,13 @@ import {
   inspectShotB64,
   inspectStep,
 } from "./agent.routes.js";
-import { INSPECT_DATA_DIR, INSPECT_HTML } from "../paths.js";
+import { INSPECT_DATA_DIR, INSPECT_HTML, PROJECT_FILES_DIR } from "../paths.js";
 import { logger } from "../logging.js";
 import { httpError, readJsonBody, wrap } from "../http-error.js";
+import { getProject, updateProject } from "../db/dao/projects.js";
+import { getDb } from "../db/connection.js";
+import { ensureMigrated } from "../db/ensure.js";
+import { generatePlaywrightJs, type RecordedStep } from "../services/script-generator.js";
 
 export const inspectRouter: Router = Router();
 
@@ -109,20 +114,73 @@ export function inspectFile(sid: string): string {
   return `${INSPECT_DATA_DIR}/${sid}.json`;
 }
 
+/** 会话 meta 索引（轻字段，历史列表/会话计数用；steps 内含 base64 截图，全量读取是 MB 级） */
+function inspectMetaFile(sid: string): string {
+  return `${INSPECT_DATA_DIR}/${sid}.meta.json`;
+}
+
 /** 时间线落盘（仅本页记录，与 index.html 的 sessions/ 完全隔离） */
 export function inspectPersist(sid: string): void {
   const meta = INSPECT_META.get(sid) ?? {};
+  const log = INSPECT_LOG.get(sid) ?? [];
   const data = {
     session_id: sid,
     start_url: meta["start_url"] ?? "",
+    project_id: meta["project_id"] ?? null,
     created_at: meta["created_at"],
     updated_at: now(),
-    steps: INSPECT_LOG.get(sid) ?? [],
+    step_count: log.length,
+    steps: log,
   };
   try {
     writeFileSync(inspectFile(sid), JSON.stringify(data, null, 1), "utf-8");
   } catch (exc) {
     logger.warning("[inspect] 落盘失败 %s: %s", sid, exc instanceof Error ? exc.message : exc);
+  }
+  // 同步写 meta 索引：列表接口零全量读取
+  try {
+    writeFileSync(
+      inspectMetaFile(sid),
+      JSON.stringify({
+        sid,
+        start_url: data.start_url,
+        project_id: data.project_id,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+        step_count: data.step_count,
+      }),
+      "utf-8",
+    );
+  } catch {
+    /* meta 写失败不影响主数据 */
+  }
+}
+
+/** 读会话 meta：优先索引；旧数据无索引 → 全量读一次并补建索引 */
+export function inspectReadMeta(sid: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(readFileSync(inspectMetaFile(sid), "utf-8")) as Record<string, unknown>;
+  } catch {
+    /* 无索引走全量补建 */
+  }
+  try {
+    const full = JSON.parse(readFileSync(inspectFile(sid), "utf-8")) as Record<string, unknown>;
+    const meta = {
+      sid,
+      start_url: full["start_url"] ?? "",
+      project_id: full["project_id"] ?? null,
+      created_at: full["created_at"],
+      updated_at: full["updated_at"],
+      step_count: Array.isArray(full["steps"]) ? full["steps"].length : 0,
+    };
+    try {
+      writeFileSync(inspectMetaFile(sid), JSON.stringify(meta), "utf-8");
+    } catch {
+      /* pass */
+    }
+    return meta;
+  } catch {
+    return null;
   }
 }
 
@@ -152,10 +210,109 @@ export async function inspectStopCdp(sid: string): Promise<void> {
   }
 }
 
-/** 关闭浏览器 + 落盘。触发点: 手动结束 / 30min 空闲 / 新建替换 / 应用退出。 */
-export async function inspectClose(sid: string, persist = true): Promise<void> {
+/** 步骤流瘦身：剔除 base64 截图等大字段（落库/步骤 JSON 用；截图单独存文件） */
+function slimSteps(steps: RecordedStep[]): RecordedStep[] {
+  return steps.map((s) => {
+    const { screenshot: _shot, ...rest } = s as RecordedStep & { screenshot?: string };
+    return rest;
+  });
+}
+
+/** 截图文件名安全化：去 Windows 非法字符，截 40 字符 */
+function shotName(idx: number, s: RecordedStep): string {
+  const safe = String(s.desc || s.method || "step")
+    .replace(/[\\/:*?"<>|\r\n\t]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 40)
+    .replace(/[. ]+$/, "");
+  return `step_${String(idx + 1).padStart(2, "0")}${safe ? "_" + safe : ""}.jpg`;
+}
+
+/** 录制产物落盘：project-files/{projectId}/ 下生成脚本镜像 / 步骤流 / 每步截图 */
+function writeProjectFiles(projectId: string, sid: string, steps: RecordedStep[], jsCode: string): string[] {
+  const dir = `${PROJECT_FILES_DIR}/${projectId}`;
+  mkdirSync(dir, { recursive: true });
+  const shotDir = `${dir}/screenshots`;
+  rmSync(shotDir, { recursive: true, force: true }); // 旧录制截图清空（树与磁盘一致）
+  mkdirSync(shotDir, { recursive: true });
+
+  writeFileSync(`${dir}/generated.js`, jsCode, "utf-8");
+  writeFileSync(
+    `${dir}/steps.json`,
+    JSON.stringify({ sessionId: sid, generatedAt: new Date().toISOString(), steps: slimSteps(steps) }, null, 1),
+    "utf-8",
+  );
+  const written: string[] = [];
+  steps.forEach((s, i) => {
+    const m = /^data:image\/(png|jpeg|jpg);base64,(.+)$/.exec(String(s.screenshot ?? ""));
+    if (!m) return; // 无截图的步骤（导航/对话框等）不生成文件
+    try {
+      const rel = `screenshots/${shotName(i, s)}`;
+      writeFileSync(`${dir}/${rel}`, Buffer.from(m[2]!, "base64"));
+      written.push(rel);
+    } catch {
+      /* 单张失败不阻塞 */
+    }
+  });
+  return written;
+}
+
+/**
+ * 结束保存 → 生成全部工程文件：录制时间线 → 项目脚本 + 磁盘产物。
+ * 1) 生成 Playwright JS 写入所属项目（scriptContent + recordConfig 步骤流）；
+ * 2) 落盘 project-files/{projectId}/：generated.js（脚本镜像）/ steps.json（步骤流）/ screenshots/（每步截图）；
+ * 3) 补齐该项目脚本为空的旧任务快照（任务先于脚本创建 → 空快照执行必败）；
+ *    非空快照是任务创建时的定点留档，不覆盖。
+ * 无绑定项目 / 无步骤 / 项目已删 → null（保持"仅时间线落盘"行为）。
+ */
+export function syncRecordingToProject(sid: string): Record<string, unknown> | null {
+  try {
+    ensureMigrated();
+    const data = inspectLoadDisk(sid);
+    if (!data) return null;
+    const projectId = String(data["project_id"] ?? "");
+    const steps = (Array.isArray(data["steps"]) ? data["steps"] : []) as RecordedStep[];
+    if (!projectId || steps.length === 0) return null;
+    const project = getProject(projectId);
+    if (!project) return null;
+
+    const jsCode = generatePlaywrightJs(steps);
+    const startUrl = String(data["start_url"] ?? "");
+    updateProject(projectId, {
+      scriptContent: jsCode,
+      scriptLang: "js",
+      recordConfig: { steps: slimSteps(steps) }, // base64 截图不入库（步骤流瘦身）
+      ...(startUrl && !project.startUrl ? { startUrl } : {}),
+    });
+    const tasksRefreshed = getDb()
+      .prepare(
+        "UPDATE tasks SET script_snapshot = ?, script_lang = 'js'" +
+          " WHERE project_id = ? AND (script_snapshot IS NULL OR script_snapshot = '')",
+      )
+      .run(jsCode, projectId).changes;
+    const shots = writeProjectFiles(projectId, sid, steps, jsCode);
+    logger.info(
+      `[inspect] 会话 ${sid} 已生成项目文件: ${project.name}（${steps.length} 步，${shots.length} 张截图，补齐 ${tasksRefreshed} 个空快照任务）`,
+    );
+    return { projectId, projectName: project.name, steps: steps.length, tasksRefreshed, screenshots: shots.length };
+  } catch (exc) {
+    logger.warning("[inspect] 录制同步项目失败 %s: %s", sid, exc instanceof Error ? exc.message : exc);
+    return null;
+  }
+}
+
+/** 关闭浏览器 + 落盘。触发点: 手动结束 / 30min 空闲 / 新建替换 / 应用退出。返回项目同步结果（未同步为 null）。 */
+export async function inspectClose(
+  sid: string,
+  persist = true,
+): Promise<Record<string, unknown> | null> {
   stopInspectUserCapture(sid);
-  if (persist) inspectPersist(sid);
+  let sync: Record<string, unknown> | null = null;
+  if (persist) {
+    inspectPersist(sid);
+    sync = syncRecordingToProject(sid); // 结束保存 → 脚本/步骤流/空快照一并生成
+  }
   await inspectStopCdp(sid);
   const explorer = INSPECT_SESSIONS.get(sid);
   INSPECT_SESSIONS.delete(sid);
@@ -170,6 +327,7 @@ export async function inspectClose(sid: string, persist = true): Promise<void> {
       /* pass */
     }
   }
+  return sync;
 }
 
 /** 空闲超时自动回收（时间线已落盘不丢失） */
@@ -263,6 +421,7 @@ inspectRouter.post(
     if (!startUrl.startsWith("http://") && !startUrl.startsWith("https://")) {
       startUrl = "http://" + startUrl; // 自动补协议
     }
+    const projectId = String(body["project_id"] ?? "").trim(); // 所属录制项目（录制项目页发起时绑定）
     for (const old of Array.from(INSPECT_SESSIONS.keys())) {
       await inspectClose(old, true);
     }
@@ -273,6 +432,16 @@ inspectRouter.post(
     if (body["headless"] === false) {
       explorer.headless = false;
     }
+    // 激活 tab 检测通道：调试端口 /json/list 首位即「最近激活 tab」（唯一可靠信号，
+    // Playwright 启动参数下 DOM/CDP 信号全部失效）；SMARTBROWSER_CDP_PORT 已设则复用
+    const debugPort =
+      Number(process.env.SMARTBROWSER_CDP_PORT) > 0
+        ? Number(process.env.SMARTBROWSER_CDP_PORT)
+        : await freeTcpPort();
+    (explorer as unknown as { extra_launch_args?: string[] }).extra_launch_args = [
+      `--remote-debugging-port=${debugPort}`,
+    ];
+    (explorer as unknown as { debug_port?: number }).debug_port = debugPort;
     try {
       await explorer._initBrowser();
       // 用户手动操作采集：注入记录脚本（必须在首次导航前，后续跳转/新 tab 自动生效）
@@ -309,7 +478,7 @@ inspectRouter.post(
     INSPECT_LOCKS.set(sid, new Mutex());
     INSPECT_LAST_ACTIVE.set(sid, now());
     INSPECT_LOG.set(sid, []);
-    INSPECT_META.set(sid, { start_url: startUrl, created_at: now() });
+    INSPECT_META.set(sid, { start_url: startUrl, created_at: now(), project_id: projectId || null });
     res.json({
       ok: true,
       sid,
@@ -367,14 +536,7 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
     // 1) 先读各页动作（异步）；全部完成后才做新页检测，保证 click → new_page 时序
     const tasks: Promise<void>[] = [];
     const newStepIdx: number[] = [];
-    let actPage: Page | null = null; // 本轮用户操作所在页（跟随其激活）
-    let focusElementList: Page[] = []; // 本轮获得焦点的页（浏览器标签栏切换 tab）
-    // 焦点稳定计数（连续 2 轮 hasFocus 才认为该页被激活）+ 切换冷静期（防执行/焦点抖动跳回）
-    if (!focusStreak.has(sid)) focusStreak.set(sid, new Map<Page, number>());
-    const streak = focusStreak.get(sid)!;
-    const clearStreak = (keep: Page | null) => {
-      for (const [k] of streak) if (k !== keep) streak.delete(k);
-    };
+    let actPage: Page | null = null; // 本轮用户操作所在页（真实操作必发生在激活 tab）
 
     for (let ti = 0; ti < knownPages.length; ti++) {
       const pg = knownPages[ti];
@@ -383,10 +545,8 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
           const w = window as unknown as { __RECORDED__?: Record<string, unknown>[] };
           const a = w.__RECORDED__ || [];
           w.__RECORDED__ = [];
-          return { actions: a, focused: document.hasFocus() };
-        }).then((r) => {
-          const actions = (r?.actions ?? []) as Record<string, unknown>[];
-          if (r?.focused && focusElementList) focusElementList.push(pg); // 该 tab 为浏览器当前激活页
+          return a;
+        }).then((actions) => {
           const l = INSPECT_LOG.get(sid);
           if (!l) return;
           for (const a of actions ?? []) {
@@ -425,11 +585,11 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
         }),
       );
     }
-    void Promise.all(tasks).then(() => {
+    void Promise.all(tasks).then(async () => {
       const l = INSPECT_LOG.get(sid);
       if (!l) return;
       const pagesNow = explorer.context?.pages() ?? [];
-      // 2) 新标签页检测（动作之后：click → new_page）
+      // 2) 新标签页检测（动作之后：click → new_page）；跟随交给激活检测/adopt 通道
       if (lastPageCount >= 0 && pagesNow.length > lastPageCount) {
         for (let ti = lastPageCount; ti < pagesNow.length; ti++) {
           l.push({
@@ -445,31 +605,18 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
           newStepIdx.push(l.length - 1);
         }
         lastUrls.set(pagesNow[pagesNow.length - 1]!, pagesNow[pagesNow.length - 1]!.url());
-        // 跟随最新标签页（context.on('page') 事件通道不可靠时兜底切换）
-        const popup = pagesNow[pagesNow.length - 1]!;
-        if (explorer.page !== popup) {
-          explorer.page = popup;
-          const stN = INSPECT_LIVE_CDP.get(sid);
-          if (stN) stN["page"] = popup;
-          notifyInspectPageSwitch(sid);
-        }
       }
       lastPageCount = pagesNow.length;
-      // 3) 用户操作/激活的 tab → 监控跟随（操作优先；无操作时按页面焦点）
-      const targetPage = actPage ?? focusPageFallback(sid, focusElementList);
+      // 3) 激活 tab 跟随：调试端口 /json/list 首位 = 用户最近激活 tab（唯一可靠信号）。
+      //    用户操作所在页优先——真实操作必发生在激活 tab，可即时跟随不等下一轮轮询
+      const activePage = await activePageFromDebugPort(explorer, pagesNow);
+      const targetPage = actPage ?? activePage;
       if (targetPage && targetPage !== explorer.page) {
-        // 防振荡：焦点切换需距上次任何切换 6s 以上（用户操作/新页切换不受限且刷新计时）
-        const isFocusOnly = targetPage !== actPage;
-        const sinceLast = Date.now() - (lastSwitchMs.get(sid) ?? 0);
-        if (isFocusOnly && sinceLast < 6000) {
-          void targetPage;
-        } else {
-          explorer.page = targetPage;
-          lastSwitchMs.set(sid, Date.now());
-          const stAct = INSPECT_LIVE_CDP.get(sid);
-          if (stAct) stAct["page"] = targetPage;
-          notifyInspectPageSwitch(sid);
-        }
+        explorer.page = targetPage;
+        const stAct = INSPECT_LIVE_CDP.get(sid);
+        if (stAct) stAct["page"] = targetPage;
+        logSwitch(sid, actPage ? "[操作]" : "[激活]", targetPage.url());
+        notifyInspectPageSwitch(sid);
       }
       // 4) 当前监控页被关闭 → 跟随剩余页（兜底）
       if (explorer.page && explorer.page.isClosed()) {
@@ -499,30 +646,77 @@ export function startInspectUserCapture(sid: string, explorer: UiMcpAgentExplore
   INSPECT_USER_TIMERS.set(sid, timer);
 }
 
-/** 焦点稳定计数（连续 2 轮 hasFocus 才视为激活 tab） */
-const focusStreak = new Map<string, Map<Page, number>>();
-const lastSwitchMs = new Map<string, number>();
+// ---------------- 激活 tab 检测（调试端口 /json/list） ----------------
 
-function focusPageFallback(sid: string, focusedPages: Page[]): Page | null {
-  const streak = focusStreak.get(sid);
-  if (!streak) return null;
-  // 本轮无焦点页（窗口失焦/无确立焦点）→ 清零计数
-  if (!focusedPages.length) {
-    for (const [k] of streak) streak.delete(k);
+/** 临时监听 127.0.0.1:0 取一个空闲端口（失败返回 0，激活检测优雅降级） */
+function freeTcpPort(): Promise<number> {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.listen(0, "127.0.0.1", () => {
+      const port = (srv.address() as net.AddressInfo).port;
+      srv.close(() => resolve(port));
+    });
+    srv.on("error", () => resolve(0));
+  });
+}
+
+const PAGE_TARGET_IDS = new WeakMap<Page, string>();
+
+/** 页面的 CDP targetId（首次经页面级会话查询后缓存；与 /json/list 条目匹配用） */
+async function pageTargetId(page: Page): Promise<string | null> {
+  const cached = PAGE_TARGET_IDS.get(page);
+  if (cached) return cached;
+  try {
+    const cdp = await page.context().newCDPSession(page);
+    const info = (await cdp.send("Target.getTargetInfo")) as {
+      targetInfo?: { targetId?: string };
+    };
+    await cdp.detach().catch(() => undefined);
+    const id = info.targetInfo?.targetId ?? null;
+    if (id) PAGE_TARGET_IDS.set(page, id);
+    return id;
+  } catch {
     return null;
   }
-  let stable: Page | null = null;
-  for (const pg of focusedPages) {
-    const n = (streak.get(pg) ?? 0) + 1;
-    streak.set(pg, n);
-    if (n >= 3) stable = pg;
+}
+
+/**
+ * 激活 tab 检测：调试端口 /json/list 的 page 类 target 按「最近激活」排序，
+ * 首位即用户当前激活的 tab。实测真实切 tab 不产生任何 DOM/CDP 事件
+ * （Playwright 启动参数下 visibilityState/hasFocus 恒为 visible/true），
+ * 轮询此接口是唯一可靠信号；端口不可用/超时 → 返回 null 维持当前监控页。
+ */
+async function activePageFromDebugPort(
+  explorer: UiMcpAgentExplorer,
+  pages: Page[],
+): Promise<Page | null> {
+  const port = (explorer as unknown as { debug_port?: number }).debug_port;
+  if (!port || pages.length < 2) return null; // 单页无从切换，省一次 HTTP
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/json/list`, {
+      signal: AbortSignal.timeout(1500),
+    });
+    const list = (await res.json()) as Array<{ id?: string; type?: string }>;
+    const first = list.find((t) => t.type === "page");
+    if (!first?.id) return null;
+    for (const pg of pages) {
+      if ((await pageTargetId(pg)) === first.id) return pg;
+    }
+    return null;
+  } catch {
+    return null;
   }
-  // 清零未聚焦页计数
-  for (const [k] of streak) if (!focusedPages.includes(k)) streak.delete(k);
-  return stable;
 }
 
 /** 页面切换通知：WS 主帧流 + SSE 兜底双通道置位（监控立即重 attach/重连） */
+let lastSwitchLog = 0;
+function logSwitch(sid: string, reason: string, url: string): void {
+  const now = Date.now();
+  if (now - lastSwitchLog > 500) {
+    console.log("[inspect] 切页 %s %s -> %s", reason, sid.slice(0, 6), url.slice(0, 60));
+    lastSwitchLog = now;
+  }
+}
 export function notifyInspectPageSwitch(sid: string): void {
   const stLive = INSPECT_LIVE_CDP.get(sid);
   if (stLive) stLive["switched"] = true;
@@ -654,8 +848,19 @@ async function inspectHitLight(
   }
 }
 
-const PROBE_ALL_JS_SRC = String.raw`(locs) => {
+// page.evaluate 只转发单个 arg → 多个入参必须打包成一个对象（散参会被静默丢弃，
+// 导致 hit/hitBox 恒为空、所有候选 index=-1 被过滤成空列表）
+const PROBE_ALL_JS_SRC = String.raw`({ locs, hitSel, hitBox }) => {
   const all = Array.from(document.querySelectorAll('*'));
+  let hit = null;
+  if (hitSel) { try { hit = document.querySelector(hitSel); } catch (e) {} }
+  // cssPath 含非法 CSS 字符时 querySelector 会抛错/找不到 → 用包围盒匹配兜底
+  const boxEq = (el, b) => {
+    if (!b) return false;
+    const r = el.getBoundingClientRect();
+    return Math.abs(r.x - b.x) < 1.5 && Math.abs(r.y - b.y) < 1.5 &&
+      Math.abs(r.width - (b.w || 0)) < 1.5 && Math.abs(r.height - (b.h || 0)) < 1.5;
+  };
   const isVisible = (el) => {
     const r = el.getBoundingClientRect();
     const cs = getComputedStyle(el);
@@ -694,16 +899,23 @@ const PROBE_ALL_JS_SRC = String.raw`(locs) => {
       for (const el of all) if ((el.getAttribute('placeholder') || '') === m[1]) matched.push(el);
     } else if ((m = s.match(/^get_by_label=(.+)$/))) {
       for (const el of all) if ((el.getAttribute('aria-label') || '') === m[1]) matched.push(el);
+    } else if ((m = s.match(/^get_by_alt_text=(.+)$/))) {
+      for (const el of all) if ((el.getAttribute('alt') || '') === m[1]) matched.push(el);
     } else if ((m = s.match(/^get_by_title=(.+)$/))) {
       for (const el of all) if ((el.getAttribute('title') || '') === m[1]) matched.push(el);
+    } else if ((m = s.match(/^get_by_test_id=(.+)$/))) {
+      for (const el of all) if ((el.getAttribute('data-testid') || '') === m[1]) matched.push(el);
     } else {
       try { matched = Array.from(document.querySelectorAll(s)); } catch (e) {}
     }
     const vis = matched.filter(isVisible);
+    let idx = hit ? matched.indexOf(hit) : -1;
+    if (idx < 0) idx = matched.findIndex((el) => boxEq(el, hitBox));
     results.push({
       locator: loc,
       count: matched.length,
       visible: vis.length,
+      index: idx,
       first: matched.length ? txt(matched[0]).slice(0, 200) : ''
     });
   }
@@ -711,9 +923,29 @@ const PROBE_ALL_JS_SRC = String.raw`(locs) => {
 }`;
 // Node playwright 字符串 evaluate 按表达式处理（isFunction=false），函数字符串
 // 不会被调用；模块加载时解析为真函数以复现 Python 客户端自动调用行为。
-const PROBE_ALL_JS: (locs: string[]) => unknown = new Function(
-  `return (${PROBE_ALL_JS_SRC});`,
-)();
+const PROBE_ALL_JS: (payload: {
+  locs: string[];
+  hitSel: string;
+  hitBox: unknown;
+}) => unknown = new Function(`return (${PROBE_ALL_JS_SRC});`)();
+
+/** 定位规则优先级：getByRole>getByText>getByLabel>getByPlaceholder>getByAltText>getByTitle>getByTestId>CSS>XPath。
+ *  链式定位（父 >> 子）按末段定性。同层保持生成顺序（稳定排序）。 */
+function locatorTier(loc: string): number {
+  const last = (loc.split(" >> ").pop() ?? "").trim();
+  const table: Array<[RegExp, number]> = [
+    [/^get_by_role=/i, 0],
+    [/^get_by_text=/i, 1],
+    [/^get_by_label=/i, 2],
+    [/^get_by_placeholder=/i, 3],
+    [/^get_by_alt_text=/i, 4],
+    [/^get_by_title=/i, 5],
+    [/^get_by_test_id=/i, 6],
+    [/^(xpath=|\/\/|\.\/|\(\/)/i, 8],
+  ];
+  for (const [re, tier] of table) if (re.test(last)) return tier;
+  return 7; // CSS 及其它
+}
 
 /** 选中：命中元素 + 候选定位器 + 批量探测（单次 page.evaluate 一次给全） */
 async function inspectSelect(
@@ -729,19 +961,34 @@ async function inspectSelect(
     return { ok: false, error: exc instanceof Error ? exc.message : String(exc) };
   }
   if (!info) return { ok: true, element: null, url: page.url() };
-  const cands = buildCandidatesFromElement(info, true).slice(0, 5);
+  // 全量候选参与探测（不做预截断），过滤后再截断展示
+  const cands = buildCandidatesFromElement(info, true);
   let scored: Array<Record<string, unknown>> = [];
   try {
-    scored = (await page.evaluate(PROBE_ALL_JS, cands)) as Array<Record<string, unknown>> ?? [];
-  } catch {
-    scored = cands.map((c) => ({ locator: c, count: 0, visible: 0 }));
+    // hitSel/hitBox = 命中元素的唯一 cssPath 与包围盒 → 每个候选附带 index（命中元素在其匹配列表中的序号）
+    scored =
+      ((await page.evaluate(PROBE_ALL_JS, {
+        locs: cands,
+        hitSel: String(info["selector"] ?? ""),
+        hitBox: info["box"] ?? null,
+      })) as Array<Record<string, unknown>>) ?? [];
+  } catch (exc) {
+    logger.warning(
+      "[inspect] 候选批量探测失败（候选计数降级为 0）: %s",
+      exc instanceof Error ? exc.message : String(exc),
+    );
+    scored = cands.map((c) => ({ locator: c, count: 0, visible: 0, index: -1 }));
   }
+  // 只保留「选中的就是命中元素」的候选（index>=0 = 命中元素在其匹配列表中），
+  // 多匹配的候选执行时会附加 nth 序号；再按定位规则优先级排序
+  scored = scored
+    .filter((c) => Number(c["index"] ?? -1) >= 0)
+    .sort((a, b) => locatorTier(String(a["locator"] ?? "")) - locatorTier(String(b["locator"] ?? "")))
+    .slice(0, 6);
   info["candidates"] = scored;
-  const best =
-    (scored.find((c) => c["count"] === 1 && c["visible"]) ?? {})["locator"] ??
-    (scored.find((c) => Number(c["visible"] ?? 0) > 0) ?? {})["locator"] ??
-    (scored.length ? scored[0]!["locator"] : "");
-  info["best"] = best;
+  const best = scored[0];
+  info["best"] = best ? String(best["locator"] ?? "") : "";
+  info["best_index"] = best ? Number(best["index"] ?? -1) : -1;
   return { ok: true, element: info, url: page.url() };
 }
 
@@ -773,6 +1020,42 @@ async function inspectCommit(
   log.push(evt);
   inspectPersist(sid);
   return evt;
+}
+
+// ---------------- 面板执行回声抑制 ----------------
+// 面板程序化执行（step/坐标点击/滚轮/拖拽）会在页面触发真实可信事件，
+// 注入录制器会把它当作用户操作再记一遍 → 同一动作在时间线出现两次。
+// 执行前设长截止覆盖慢执行；执行后收敛为短尾窗，接住 blur/change/滚动防抖等滞后事件。
+async function suppressRawCapture(page: Page, during: () => Promise<void>): Promise<void> {
+  const setDeadline = (ms: number): Promise<void> =>
+    page
+      .evaluate((ttl) => {
+        (window as unknown as { __REC_SUPPRESS_UNTIL__?: number }).__REC_SUPPRESS_UNTIL__ =
+          Date.now() + ttl;
+      }, ms)
+      .then(() => undefined)
+      .catch(() => undefined);
+  await setDeadline(30000);
+  try {
+    await during();
+  } finally {
+    await setDeadline(600);
+  }
+}
+
+/** 面板动作引发的跳转可能被采集循环先落盘（1s 轮询先于 WS 提交返回），
+ *  把 [preLen, 提交位) 内的 navigate 移到本步骤之后，保持「点击 → 跳转」因果顺序。 */
+function demoteCausedNavigates(sid: string, preLen: number, evt: Record<string, unknown>): void {
+  const logArr = INSPECT_LOG.get(sid);
+  if (!logArr) return;
+  const commitIdx = logArr.indexOf(evt);
+  if (commitIdx < 0 || commitIdx <= preLen) return;
+  const seg = logArr.slice(preLen, commitIdx);
+  const navigates = seg.filter((s) => s["method"] === "navigate");
+  if (!navigates.length) return;
+  const rest = seg.filter((s) => s["method"] !== "navigate");
+  logArr.splice(preLen, seg.length + 1, ...rest, evt, ...navigates);
+  inspectPersist(sid);
 }
 
 /** 统一动作分发（HTTP 与 WebSocket 共用；锁由调用方持有） */
@@ -816,8 +1099,10 @@ export async function inspectDispatch(
       // 滚轮作用于鼠标位置下的元素——不先 move 到预览对应点，mouse 停在 (0,0) 内层滚动容器永远滚不到
       await page.mouse.move(Number(x), Number(y));
     }
-    await page.mouse.wheel(dx, dy);
-    await sleep(0.15);
+    await suppressRawCapture(page, async () => {
+      await page.mouse.wheel(dx, dy);
+      await sleep(0.15);
+    });
     return { ok: true, url: page.url() };
   }
   if (action === "navigate") {
@@ -831,9 +1116,17 @@ export async function inspectDispatch(
   }
   if (action === "step") {
     const method = String(payload["method"] ?? "");
-    const locator = payload["locator"];
+    let locator: unknown = payload["locator"];
     const value = payload["value"];
     const elText = payload["el_text"];
+    // 多元素命中：为定位器附加 nth 实例索引（运行时 resolver 与脚本生成器都识别 >> nth=N），
+    // 保证录制时点到的那个元素在回放/生成脚本中依然命中，而非触发严格模式多元素报错
+    const elCount = Number(payload["el_count"] ?? 0);
+    const elIndex = Number(payload["el_index"] ?? -1);
+    if (locator && elCount > 1 && elIndex >= 0) {
+      const norm = normalizeLocator(locator);
+      if (!/nth\s*=\s*\d+$/.test(norm)) locator = `${norm} >> nth=${elIndex}`;
+    }
     let warning: unknown = null;
     const preLen = (INSPECT_LOG.get(sid) ?? []).length; // 执行期间可能插入 dialog 等事件
     if (method === "upload_file") {
@@ -843,14 +1136,17 @@ export async function inspectDispatch(
       let error: unknown = null;
       try {
         const locObj = resolveLocatorOnPage(page, normalizeLocator(String(locator)))!;
-        await locObj.first().setInputFiles(String(value));
+        await suppressRawCapture(page, () => locObj.first().setInputFiles(String(value)));
       } catch (exc) {
         success = false;
         error = exc instanceof Error ? exc.message : String(exc);
       }
       if (!success) return { ok: false, error: error ?? "上传失败" };
     } else {
-      const result = await inspectStep(explorer, method, locator, value);
+      let result: Record<string, unknown> = { ok: false, error: "未执行" };
+      await suppressRawCapture(page, async () => {
+        result = await inspectStep(explorer, method, locator, value);
+      });
       if (!result["ok"]) return { ok: false, error: result["error"] ?? "执行失败" };
       warning = result["warning"];
     }
@@ -866,14 +1162,18 @@ export async function inspectDispatch(
     );
     // 把执行期间（如原生 dialog）插入的事件一并带回给前端
     const extra = (INSPECT_LOG.get(sid) ?? []).slice(preLen, -1);
+    demoteCausedNavigates(sid, preLen, evt);
     return { ok: true, event: evt, warning, extra_events: extra };
   }
   if (action === "click_at") {
     // 坐标点击兜底（canvas/无语义元素无候选定位器时）
     const x = Number(payload["x"] ?? 0);
     const y = Number(payload["y"] ?? 0);
-    await page.mouse.click(x, y);
-    await sleep(0.4);
+    const preLen = (INSPECT_LOG.get(sid) ?? []).length;
+    await suppressRawCapture(page, async () => {
+      await page.mouse.click(x, y);
+      await sleep(0.4);
+    });
     const evt = await inspectCommit(
       sid,
       page,
@@ -882,6 +1182,7 @@ export async function inspectDispatch(
       "",
       "",
     );
+    demoteCausedNavigates(sid, preLen, evt);
     evt["sx"] = x;
     evt["sy"] = y; // 供代码生成
     return { ok: true, event: evt };
@@ -901,9 +1202,11 @@ export async function inspectDispatch(
     const y = Number(payload["y"] ?? 0);
     const sx = Number(payload["sx"] ?? 0);
     const sy = Number(payload["sy"] ?? 0);
-    await page.mouse.move(x, y, { steps: 1 });
-    await page.mouse.up();
-    await sleep(0.4);
+    await suppressRawCapture(page, async () => {
+      await page.mouse.move(x, y, { steps: 1 });
+      await page.mouse.up();
+      await sleep(0.4);
+    });
     const evt = await inspectCommit(
       sid,
       page,
@@ -939,8 +1242,8 @@ export async function inspectDispatch(
     }
   }
   if (action === "close") {
-    await inspectClose(sid, true);
-    return { ok: true, closed: true };
+    const sync = await inspectClose(sid, true);
+    return { ok: true, closed: true, sync };
   }
   throw new Error(`未知动作: ${action}`); // 协议错误 → HTTP 422 / WS {ok:false}
 }
@@ -975,15 +1278,16 @@ inspectRouter.post(
   wrap(async (req, res) => {
     const sid = req.params.sid!;
     if (!INSPECT_SESSIONS.has(sid)) throw httpError(404, "inspect 会话不存在或已关闭");
-    await inspectClose(sid, true);
-    res.json({ ok: true });
+    const sync = await inspectClose(sid, true);
+    res.json({ ok: true, sync });
   }),
 );
 
 inspectRouter.get(
   "/api/inspect/sessions",
   wrap((_req, res) => {
-    /** 历史列表（inspect_data/ 目录）+ 存活标记（回放+存活续操） */
+    /** 历史列表（inspect_data/ 目录）+ 存活标记（回放+存活续操）。
+     *  只读轻量 meta 索引（steps 含 base64 截图，全量解析是 MB 级——历史瓶颈） */
     const items: Record<string, unknown>[] = [];
     let names: string[] = [];
     try {
@@ -992,16 +1296,17 @@ inspectRouter.get(
       names = [];
     }
     for (const name of names) {
-      if (!name.endsWith(".json")) continue;
+      if (!name.endsWith(".json") || name.endsWith(".meta.json")) continue;
       const sid = name.slice(0, -5);
-      const data = inspectLoadDisk(sid);
-      if (!data) continue;
+      const meta = inspectReadMeta(sid);
+      if (!meta) continue;
       items.push({
         sid,
-        start_url: data["start_url"] ?? "",
-        created_at: data["created_at"],
-        updated_at: data["updated_at"],
-        step_count: Array.isArray(data["steps"]) ? data["steps"].length : 0,
+        start_url: meta["start_url"] ?? "",
+        project_id: meta["project_id"] ?? null,
+        created_at: meta["created_at"],
+        updated_at: meta["updated_at"],
+        step_count: Number(meta["step_count"] ?? 0),
         alive: INSPECT_SESSIONS.has(sid),
       });
     }
@@ -1020,6 +1325,7 @@ inspectRouter.get(
         sid,
         alive: INSPECT_SESSIONS.has(sid),
         start_url: (INSPECT_META.get(sid) ?? {})["start_url"] ?? "",
+        project_id: (INSPECT_META.get(sid) ?? {})["project_id"] ?? null,
         steps: INSPECT_LOG.get(sid)!,
       });
       return;
@@ -1030,6 +1336,7 @@ inspectRouter.get(
       sid,
       alive: false,
       start_url: data["start_url"] ?? "",
+      project_id: data["project_id"] ?? null,
       steps: data["steps"] ?? [],
     });
   }),

@@ -1,0 +1,52 @@
+# =========================================
+# nodejs-green-packager 自定义配置示例
+# 将此文件内容合并进 .github/workflows/package-green.yml
+# 或作为参数清单，指导脚本替换
+# =========================================
+
+# 应用名称（替换所有 myapp 为你的应用名）
+app_name: myapp
+
+# Node.js 版本（与 setup-node 及下载二进制保持一致）
+node_version: "22.11.0"
+
+# 默认端口（写入启停脚本的 PORT 变量）
+default_port: 3000
+
+# 需要打包的 Playwright 浏览器
+# 可选: chromium / firefox / webkit / (组合)
+playwright_browsers:
+  - chromium
+
+# 平台矩阵（GitHub Actions matrix.include）
+platforms:
+  - os: windows-latest
+    platform: win-x64
+    node_arch: x64
+    node_platform: win
+    package_name: myapp-win-x64
+  - os: ubuntu-latest
+    platform: linux-x64
+    node_arch: x64
+    node_platform: linux
+    package_name: myapp-linux-x64
+  - os: ubuntu-24.04-arm
+    platform: linux-arm64
+    node_arch: arm64
+    node_platform: linux
+    package_name: myapp-linux-arm64
+
+# Linux 运行所需系统依赖（Playwright 环境预装）
+linux_system_deps:
+  - libnss3
+  - libatk-bridge2.0-0
+  - libdrm2
+  - libxkbcommon0
+  - libgbm1
+  - libasound2
+
+# 发布配置（如需 GitHub Release）
+release:
+  enabled: true
+  artifacts_glob: "artifacts/**/*.zip"
+  generate_release_notes: true

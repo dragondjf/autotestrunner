@@ -47,9 +47,10 @@ elif [ -x /c/Windows/System32/tar.exe ]; then
     /c/Windows/System32/tar.exe -a -cf "../${ZIP_NAME}" -T .artr-filelist.txt && \
     rm -f .artr-filelist.txt )
 else
-  WIN_OUT="$(cygpath -w "$OUT")"
-  WIN_ZIP="$(cygpath -w "$ZIP")"
-  powershell -NoProfile -Command "Compress-Archive -Path \"${WIN_OUT}\\*\" -DestinationPath \"${WIN_ZIP}\" -Force"
+  # git-bash 环境下 PowerShell 不识别 /d/... 风格路径，先转成 Windows 路径
+  PS_OUT="$OUT"; PS_ZIP="$ZIP"
+  command -v cygpath >/dev/null 2>&1 && { PS_OUT="$(cygpath -w "$OUT")"; PS_ZIP="$(cygpath -w "$ZIP")"; }
+  powershell -NoProfile -Command "Compress-Archive -Path '${PS_OUT}\*' -DestinationPath '${PS_ZIP}' -Force"
 fi
 
 SIZE="$(du -h "$ZIP" | awk '{print $1}')"

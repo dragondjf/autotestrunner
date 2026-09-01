@@ -321,8 +321,8 @@ describe("录制代理（REC-B01）", () => {
     const script = detail.body.data.scriptContent as string;
     expect(script).toContain("autoShot");
     expect(script).toContain("playwright");
-    expect(script).toContain("page.fill('#username', 'admin')");
-    expect(script).toContain("page.click('#submit')");
+    expect(script).toContain("page.locator('#username').fill('admin')");
+    expect(script).toContain("page.locator('#submit').click()");
     // 原始步骤流留档于 recordConfig（详情返回已解析对象，供编辑/再生成）
     const cfg = detail.body.data.recordConfig;
     expect(cfg.steps[1].method).toBe("input");

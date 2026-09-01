@@ -1,0 +1,27 @@
+@echo off
+REM MyApp - Windows 启动脚本模板
+REM 复制为 start.bat 并置于绿色版包根目录
+REM 用法: start.bat [--port 3000]
+
+set SCRIPT_DIR=%~dp0
+set NODE_PATH=%SCRIPT_DIR%node_modules
+set PLAYWRIGHT_BROWSERS_PATH=%SCRIPT_DIR%.cache\ms-playwright
+set PID_FILE=%SCRIPT_DIR%app.pid
+set LOG_FILE=%SCRIPT_DIR%app.log
+
+if exist "%PID_FILE%" (
+    set /p OLD_PID=<"%PID_FILE%"
+    echo [WARN] 应用已在运行 (PID: !OLD_PID!)
+    echo 如需重启请先执行 stop.bat
+    exit /b 1
+)
+
+echo [INFO] 正在启动应用...
+start /B "%SCRIPT_DIR%node\node.exe" "%SCRIPT_DIR%dist\index.js" %* > "%LOG_FILE%" 2>&1
+
+REM 获取新启动的进程 PID
+powershell -Command "Get-Process -Name node | Where-Object { $_.StartTime -gt (Get-Date).AddMinutes(-1) } | Select-Object -First 1 | ForEach-Object { $_.Id }" > "%PID_FILE%"
+
+echo [OK] 应用已启动
+echo [INFO] 日志文件: %LOG_FILE%
+echo [INFO] 停止服务请运行: stop.bat

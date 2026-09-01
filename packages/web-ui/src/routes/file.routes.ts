@@ -12,6 +12,7 @@ import { bizErrors } from "../api/respond.js";
 import {
   ARTIFACTS_DIR,
   BASE_DIR,
+  PROJECT_FILES_DIR,
   RECORD_SESSIONS_DIR,
   RECORDINGS_DIR,
   REPORT_EXPORTS_DIR,
@@ -25,6 +26,7 @@ const WHITELIST: Record<string, string> = {
   "artifacts": ARTIFACTS_DIR,
   "reports": BASE_DIR === REPORT_EXPORTS_DIR ? REPORT_EXPORTS_DIR : path.dirname(REPORT_EXPORTS_DIR),
   "task-files": TASK_FILES_DIR,
+  "project-files": PROJECT_FILES_DIR,
   "record-sessions": RECORD_SESSIONS_DIR,
   "recordings": RECORDINGS_DIR,
 };

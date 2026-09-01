@@ -11,11 +11,24 @@ import { unlink, writeFile } from "node:fs/promises";
 import readline from "node:readline";
 import { Router, type Response } from "express";
 import { AsyncQueue, SSE_HEADERS } from "@brickcore/shared";
+import { ARTIFACTS_DIR } from "../paths.js";
 import { readJsonBody, wrap } from "../http-error.js";
 
 export const execRouter: Router = Router();
 
 type LogEvent = { type: "log"; level: "info" | "error" | "ok"; text: string };
+/** 步骤事件：生成脚本的 autoShot 每步输出 @@STEP@@ 标记行 → SSE 实时推给前端时间线 */
+type StepEvent = {
+  type: "step";
+  step: number;
+  desc: string;
+  method: string;
+  locator: string;
+  url: string;
+  screenshot: string;
+};
+const STEP_MARK = "@@STEP@@";
+const DEBUG_SHOTS_REL = "artifacts/debug-shots";
 
 // ---------------- NODE_PATH 解析 ----------------
 let _NODE_MODULES_PATH: string | null = null;
@@ -64,9 +77,12 @@ export function nodeEnv(): NodeJS.ProcessEnv {
 }
 
 // ---------------- SSE 泵 ----------------
-async function pumpStream(res: Response, queue: AsyncQueue<LogEvent | { type: "done" }>): Promise<void> {
+async function pumpStream(
+  res: Response,
+  queue: AsyncQueue<LogEvent | StepEvent | { type: "done" }>,
+): Promise<void> {
   while (true) {
-    let evt: LogEvent | { type: "done" };
+    let evt: LogEvent | StepEvent | { type: "done" };
     try {
       // 对齐 asyncio.wait_for(queue.get(), 1.0)：超时继续循环
       evt = await queue.get(1000);
@@ -88,18 +104,30 @@ interface ScriptSpec {
   env?: () => NodeJS.ProcessEnv;
 }
 
-async function runScriptStream(req: { code: string }, spec: ScriptSpec, res: Response): Promise<void> {
+async function runScriptStream(
+  req: { code: string; stepIntervalMs?: number },
+  spec: ScriptSpec,
+  res: Response,
+): Promise<void> {
   const tmpPath = path.join(os.tmpdir(), `brickcore-${randomUUID()}${spec.suffix}`);
   await writeFile(tmpPath, req.code, "utf-8");
 
-  const queue = new AsyncQueue<LogEvent | { type: "done" }>();
+  // 调试截图目录：注入白名单路径（artifacts/debug-shots/<runId>），前端经 /api/files 实时取图
+  const runId = randomUUID().slice(0, 8);
+  const shotDir = path.join(ARTIFACTS_DIR, "debug-shots", runId);
+
+  const queue = new AsyncQueue<LogEvent | StepEvent | { type: "done" }>();
 
   const execute = async (): Promise<void> => {
     try {
       queue.put({ type: "log", level: "info", text: spec.startText });
       const cmd = spec.spawnCmd();
+      const env = spec.env?.() ?? process.env;
+      env["AUTOTEST_SCREENSHOT_DIR"] = shotDir;
+      // 步骤间隔（ms）：生成脚本每步 autoShot 后等待，避免跑得过快看不清过程
+      if ((req.stepIntervalMs ?? 0) > 0) env["AUTOTEST_STEP_INTERVAL_MS"] = String(req.stepIntervalMs);
       const proc = spawn(cmd, [tmpPath], {
-        env: spec.env?.() ?? process.env,
+        env,
         stdio: ["ignore", "pipe", "pipe"],
       });
 
@@ -109,7 +137,28 @@ async function runScriptStream(req: { code: string }, spec: ScriptSpec, res: Res
           rl.on("line", (line: string) => {
             // Python: decode(errors="replace").rstrip()，空行跳过
             const text = line.replace(/\s+$/, "");
-            if (text) queue.put({ type: "log", level, text });
+            if (!text) return;
+            // 步骤标记行（stdout）：转 step 事件（截图 URL 指向白名单目录），不进日志流
+            if (level === "info" && text.startsWith(STEP_MARK)) {
+              try {
+                const m = JSON.parse(text.slice(STEP_MARK.length)) as Record<string, unknown>;
+                queue.put({
+                  type: "step",
+                  step: Number(m["step"] ?? 0),
+                  desc: String(m["desc"] ?? ""),
+                  method: String(m["method"] ?? ""),
+                  locator: String(m["locator"] ?? ""),
+                  url: String(m["url"] ?? ""),
+                  screenshot: m["shot"]
+                    ? `/api/files/${DEBUG_SHOTS_REL}/${runId}/${String(m["shot"])}`
+                    : "",
+                });
+              } catch {
+                /* 非法标记行丢弃 */
+              }
+              return;
+            }
+            queue.put({ type: "log", level, text });
           });
           rl.on("close", () => resolve());
         });
@@ -166,8 +215,9 @@ execRouter.post(
     /** 接收 JS 代码，用 node 子进程执行，SSE 流式返回 stdout/stderr。 */
     const body = await readJsonBody(req);
     const code = String(body["code"] ?? "");
+    const stepIntervalMs = Math.max(0, Number(body["stepIntervalMs"] ?? 0) || 0);
     await runScriptStream(
-      { code },
+      { code, stepIntervalMs },
       {
         suffix: ".js",
         startText: "🚀 执行 JavaScript 脚本 (node)…",

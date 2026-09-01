@@ -21,6 +21,7 @@ import {
 import { listTasks, taskHasActiveRun } from "../db/dao/tasks.js";
 import { parseJsonField } from "../db/dao/common.js";
 import { INSPECT_DATA_DIR, SESSION_DIR } from "../paths.js";
+import { inspectReadMeta } from "./inspect.routes.js";
 import { ensureMigrated } from "../db/ensure.js";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -122,17 +123,44 @@ projectRouter.get(
       type,
       status,
     });
-    // 关联录制会话数：磁盘会话历史按 URL 前缀匹配（browser → inspect_data，ai → sessions）
+    // 关联录制会话数：整目录只扫一次（轻量 meta 优先），按 URL 前缀/项目绑定计数
+    // （旧实现每个项目把 inspect_data 全量 JSON 读一遍——steps 含 base64 截图，N 项目 × MB 级 = 秒级卡顿）
+    const sessionCountsByUrl = new Map<string, number>();
+    try {
+      const urlCount = new Map<string, number>();
+      for (const name of readdirSync(INSPECT_DATA_DIR)) {
+        if (!name.endsWith(".json") || name.endsWith(".meta.json")) continue;
+        const meta = inspectReadMeta(name.slice(0, -5));
+        if (!meta) continue;
+        const u = String(meta["start_url"] ?? "").replace(/\/$/, "");
+        if (u) urlCount.set(u, (urlCount.get(u) ?? 0) + 1);
+      }
+      for (const [u, n] of urlCount) {
+        sessionCountsByUrl.set(u.replace(/\/$/, ""), n);
+        // 前缀匹配：会话 URL 可能带路径/锚（/login vs 裸域）→ 祖先前缀都累计
+        const segs = u.split("/");
+        for (let i = segs.length - 1; i >= 3; i--) {
+          const anc = segs.slice(0, i).join("/");
+          if (anc) sessionCountsByUrl.set(anc, (sessionCountsByUrl.get(anc) ?? 0) + n);
+        }
+      }
+    } catch {
+      /* 目录不可读 → 计数 0 */
+    }
     const countSessions = (p: (typeof result.list)[number]): number => {
       try {
+        if (p.type === "browser") {
+          const prefix = (p.startUrl || "").replace(/\/$/, "");
+          return prefix ? (sessionCountsByUrl.get(prefix) ?? 0) : 0;
+        }
+        // AI 会话（sessions/ 目录）：只取 start_url 字段粗略计数
         const prefix = (p.startUrl || "").replace(/\/$/, "");
         if (!prefix) return 0;
-        const dir = p.type === "browser" ? INSPECT_DATA_DIR : SESSION_DIR;
         let n = 0;
-        for (const name of readdirSync(dir)) {
+        for (const name of readdirSync(SESSION_DIR)) {
           if (!name.endsWith(".json")) continue;
           try {
-            const data = JSON.parse(readFileSync(path.join(dir, name), "utf-8")) as {
+            const data = JSON.parse(readFileSync(path.join(SESSION_DIR, name), "utf-8")) as {
               start_url?: string;
             };
             if (String(data.start_url ?? "").replace(/\/$/, "").startsWith(prefix)) n++;

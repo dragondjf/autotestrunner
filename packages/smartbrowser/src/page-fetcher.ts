@@ -694,7 +694,12 @@ export class SmartPageExplorer {
   }
 
   async _initBrowser(): Promise<void> {
-    this.browser = await chromium.launch({ headless: this.headless, args: BROWSER_LAUNCH_ARGS });
+    // 实例级追加启动参数（inspect 会话注入 --remote-debugging-port 供激活 tab 检测）
+    const extra = (this as unknown as { extra_launch_args?: string[] }).extra_launch_args ?? [];
+    this.browser = await chromium.launch({
+      headless: this.headless,
+      args: [...BROWSER_LAUNCH_ARGS, ...extra],
+    });
     this.context = await this.browser.newContext({
       viewport: { width: 1920, height: 1080 },
       // 高清采样: inspect 会话可置 2；默认 1 保持既有行为

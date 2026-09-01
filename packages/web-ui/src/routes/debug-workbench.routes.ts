@@ -4,7 +4,7 @@
  * - GET /file?path= 读白名单内文件内容（相对 data/）
  * 设计依据：交互调试页三栏布局（左目录树/中编辑器日志/右步骤栏）。
  */
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { Router } from "express";
 import { wrap } from "../http-error.js";
@@ -12,17 +12,42 @@ import { bizErrors, ok } from "../api/respond.js";
 import { getProject } from "../db/dao/projects.js";
 import { getTask, listTaskFiles } from "../db/dao/tasks.js";
 import { getDb } from "../db/connection.js";
-import { BASE_DIR, TASK_FILES_DIR } from "../paths.js";
+import { BASE_DIR, PROJECT_FILES_DIR, TASK_FILES_DIR } from "../paths.js";
 import { ensureMigrated } from "../db/ensure.js";
 
 export const debugWorkbenchRouter: Router = Router();
 
 interface FileNode {
   name: string;
-  kind: "script" | "resource" | "generated";
-  path: string; // 相对 data/（可经 /api/files 访问）
+  kind: "script" | "resource" | "generated" | "steps" | "image";
+  path: string; // 相对 data/（文本经 /file 读，图片经 /api/files 访问）
   size: number;
   lang: string;
+}
+
+/** 项目录制产物（project-files/{pid}/）：脚本镜像 + 步骤流 + 每步截图 */
+function projectFileNodes(projectId: string): FileNode[] {
+  const dir = path.join(PROJECT_FILES_DIR, projectId);
+  const nodes: FileNode[] = [];
+  const tryPush = (rel: string, name: string, kind: FileNode["kind"], lang: string): void => {
+    const abs = path.join(dir, rel);
+    try {
+      nodes.push({ name, kind, path: `project-files/${projectId}/${rel}`, size: statSync(abs).size, lang });
+    } catch {
+      /* 未生成（该项目从未结束保存过）→ 跳过 */
+    }
+  };
+  tryPush("generated.js", "generated.js（磁盘镜像）", "generated", "js");
+  tryPush("steps.json", "steps.json（录制步骤流）", "steps", "json");
+  try {
+    for (const f of readdirSync(path.join(dir, "screenshots")).sort()) {
+      if (!/\.(png|jpe?g|gif|webp)$/i.test(f)) continue;
+      tryPush(`screenshots/${f}`, f, "image", "image");
+    }
+  } catch {
+    /* 无截图目录 */
+  }
+  return nodes;
 }
 
 /** 项目文件树：生成脚本（scriptContent）+ 关联任务上传的脚本与资源文件 */
@@ -36,6 +61,8 @@ debugWorkbenchRouter.get(
     if (!project) throw bizErrors.notFound("项目不存在");
 
     const nodes: FileNode[] = [];
+    // 0. 项目录制产物（结束保存落盘：脚本镜像/步骤流/截图）
+    nodes.push(...projectFileNodes(projectId));
     // 1. 项目生成脚本（虚拟文件：内容在 DB）
     if (project.scriptContent && project.scriptContent.trim()) {
       nodes.push({
@@ -106,10 +133,15 @@ debugWorkbenchRouter.get(
       throw bizErrors.paramInvalid("非法虚拟路径");
     }
 
-    // 磁盘文件：仅允许 task-files/ 前缀（防穿越）
-    if (!p.startsWith("task-files/")) throw bizErrors.paramInvalid("禁止访问的路径");
-    const abs = path.resolve(TASK_FILES_DIR, p.slice("task-files/".length));
-    if (!abs.startsWith(path.resolve(TASK_FILES_DIR))) throw bizErrors.paramInvalid("非法路径");
+    // 磁盘文件：task-files/（任务上传）与 project-files/（录制产物），防穿越
+    const roots: Record<string, string> = { "task-files/": TASK_FILES_DIR, "project-files/": PROJECT_FILES_DIR };
+    const relRoot = Object.keys(roots).find((pfx) => p.startsWith(pfx));
+    if (!relRoot) throw bizErrors.paramInvalid("禁止访问的路径");
+    if (/\.(png|jpe?g|gif|webp|mp4|webm)$/i.test(p)) {
+      throw bizErrors.paramInvalid("二进制文件请经 /api/files 访问");
+    }
+    const abs = path.resolve(roots[relRoot]!, p.slice(relRoot.length));
+    if (!abs.startsWith(path.resolve(roots[relRoot]!))) throw bizErrors.paramInvalid("非法路径");
     if (!existsSync(abs)) throw bizErrors.notFound("文件不存在");
     const content = readFileSync(abs, "utf-8");
     const ext = path.extname(abs).toLowerCase();

@@ -1,0 +1,54 @@
+@echo off
+REM MyApp - Windows 停止脚本模板
+REM 复制为 stop.bat 并置于绿色版包根目录
+REM 用法: stop.bat   (通过 PID 文件 + 端口双重查找)
+
+set SCRIPT_DIR=%~dp0
+set PID_FILE=%SCRIPT_DIR%app.pid
+set PORT=3000
+
+echo ========================================
+echo   Stopping MyApp Service
+echo ========================================
+echo.
+
+if exist "%PID_FILE%" (
+    set /p PID=<"%PID_FILE%"
+    echo [INFO] 找到 PID 文件: !PID!
+
+    tasklist /FI "PID eq !PID!" 2>NUL | find /I "!PID!" >NUL
+    if errorlevel 1 (
+        echo [WARN] 进程 !PID! 已不存在
+        del "%PID_FILE%"
+        goto :kill_by_port
+    )
+
+    echo [INFO] 正在终止进程 !PID! ...
+    taskkill /PID !PID! /T /F >NUL 2>&1
+    if errorlevel 1 (
+        echo [ERROR] 无法终止进程 !PID!
+    ) else (
+        echo [OK] 进程 !PID! 已终止
+        del "%PID_FILE%"
+        goto :end
+    )
+)
+
+:kill_by_port
+echo [INFO] 尝试通过端口 %PORT% 查找进程...
+for /f "tokens=5" %%a in ('netstat -ano ^| find ":%PORT%" ^| find "LISTENING"') do (
+    echo [INFO] 找到占用端口 %PORT% 的进程: %%a
+    taskkill /PID %%a /T /F >NUL 2>&1
+    if errorlevel 1 (
+        echo [ERROR] 无法终止进程 %%a
+    ) else (
+        echo [OK] 进程 %%a 已终止
+    )
+    goto :end
+)
+
+echo [WARN] 未找到运行中的应用
+
+:end
+echo.
+pause

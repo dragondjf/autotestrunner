@@ -45,6 +45,7 @@ export const DB_FILE = path.join(BASE_DIR, "autotest.db");
 
 export const UPLOADS_TMP_DIR = path.join(BASE_DIR, "uploads", "tmp"); // 向导临时上传（TTL 24h）
 export const TASK_FILES_DIR = path.join(BASE_DIR, "task-files"); // {taskId}/script|resources/
+export const PROJECT_FILES_DIR = path.join(BASE_DIR, "project-files"); // {projectId}/ 结束保存落盘（脚本/步骤流/截图）
 export const ARTIFACTS_DIR = path.join(BASE_DIR, "artifacts"); // executions/{id}/screenshots|video
 export const REPORT_EXPORTS_DIR = path.join(BASE_DIR, "reports", "exports"); // 报告导出产物
 export const RECORD_SESSIONS_DIR = path.join(BASE_DIR, "record-sessions"); // 浏览器录制动作流
@@ -57,6 +58,7 @@ for (const dir of [
   INSPECT_DATA_DIR,
   UPLOADS_TMP_DIR,
   TASK_FILES_DIR,
+  PROJECT_FILES_DIR,
   ARTIFACTS_DIR,
   REPORT_EXPORTS_DIR,
   RECORD_SESSIONS_DIR,
