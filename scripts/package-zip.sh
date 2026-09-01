@@ -40,10 +40,12 @@ echo "    ${APP_NAME} | ${ARCH} | ${OS} | ${TS} | commit ${COMMIT}"
 # node_modules/**/data)，故用 find -prune 生成"仅顶层排除"的文件清单(-T)。
 ZIP_NAME="$(basename "$ZIP")"
 if command -v zip >/dev/null 2>&1; then
-  ( cd "$OUT" && zip -rq "$ZIP" . -x 'data/*' )
+  # -y 必须带：默认解引用 symlink 会把 pnpm 链接布局压平，
+  # tsx 变成顶层真实目录后找不到兄弟依赖 esbuild → MODULE_NOT_FOUND
+  ( cd "$OUT" && zip -rqy "$ZIP" . -x 'data/*' )
 elif [ -x /c/Windows/System32/tar.exe ]; then
   ( cd "$OUT" && \
-    find . -path ./data -prune -o -type f -print | sed 's|^\./||' > .artr-filelist.txt && \
+    find . -path ./data -prune -o \( -type f -o -type l \) -print | sed 's|^\./||' > .artr-filelist.txt && \
     /c/Windows/System32/tar.exe -a -cf "../${ZIP_NAME}" -T .artr-filelist.txt && \
     rm -f .artr-filelist.txt )
 else

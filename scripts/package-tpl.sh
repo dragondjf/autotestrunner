@@ -21,6 +21,8 @@ gen_scripts() {
 @echo off
 chcp 65001 >nul
 cd /d %~dp0
+rem 运行时数据目录可能缺失(空目录 zip 打包不保留)，日志重定向需要它
+if not exist data mkdir data
 
 set "NODE_DIR=%~dp0node"
 set "PATH=%NODE_DIR%;%PATH%"
@@ -102,6 +104,8 @@ BATEOF
   cat > "$OUT/start.sh" <<'SHEOF'
 #!/usr/bin/env bash
 cd "$(dirname "$0")"
+# 运行时数据目录可能缺失(空目录 zip 打包不保留)，日志重定向需要它
+mkdir -p data
 export PATH="$PWD/node:$PATH"
 
 # ===== 读取 application.json 配置（端口/名称/自动开浏览器） =====
