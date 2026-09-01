@@ -30,11 +30,26 @@ rm -f "$ZIP"
 echo "==> 打包: $ZIP"
 echo "    ${APP_NAME} | ${ARCH} | ${OS} | ${TS} | commit ${COMMIT}"
 
-# ---------- 压缩（zip 命令优先，缺省回退 powershell Compress-Archive） ----------
+# ---------- 压缩 ----------
+# 优先 zip；Windows(git-bash) 用系统自带 bsdtar(tar.exe, C:\Windows\System32，
+# 按 .zip 扩展名生成 zip，GNU tar 的 -a 不支持 zip 故必须写死绝对路径)；
+# 再兜底 powershell Compress-Archive（必须 cygpath 转 Windows 路径 —— MSYS
+# 路径内嵌在引号串里不会被自动转换，曾致 "The path 'D:\d\a\...' does not
+# exist" 而打包失败）。
+# 注意: bsdtar 的 --exclude 是全树路径段匹配，会误伤深层同名目录(如
+# node_modules/**/data)，故用 find -prune 生成"仅顶层排除"的文件清单(-T)。
+ZIP_NAME="$(basename "$ZIP")"
 if command -v zip >/dev/null 2>&1; then
   ( cd "$OUT" && zip -rq "$ZIP" . -x 'data/*' )
+elif [ -x /c/Windows/System32/tar.exe ]; then
+  ( cd "$OUT" && \
+    find . -path ./data -prune -o -type f -print | sed 's|^\./||' > .artr-filelist.txt && \
+    /c/Windows/System32/tar.exe -a -cf "../${ZIP_NAME}" -T .artr-filelist.txt && \
+    rm -f .artr-filelist.txt )
 else
-  powershell -NoProfile -Command "Compress-Archive -Path '$OUT/*' -DestinationPath '$ZIP' -Force"
+  WIN_OUT="$(cygpath -w "$OUT")"
+  WIN_ZIP="$(cygpath -w "$ZIP")"
+  powershell -NoProfile -Command "Compress-Archive -Path \"${WIN_OUT}\\*\" -DestinationPath \"${WIN_ZIP}\" -Force"
 fi
 
 SIZE="$(du -h "$ZIP" | awk '{print $1}')"
