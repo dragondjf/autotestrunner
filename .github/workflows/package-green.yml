@@ -51,7 +51,17 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        # dangerously-allow-all-builds 必带: pnpm 10 默认拦截依赖构建脚本,
+        # better-sqlite3 的原生 binding 不会编译(仅 prebuild-install 也被拦),
+        # 打出的包 web-ui 一开数据库即崩("Could not locate the bindings file")
+        run: pnpm install --frozen-lockfile --config.dangerously-allow-all-builds=true
+
+      - name: Verify native bindings
+        # 打包前就地验证原生模块已编译, 防止缺 binding 的包溜进 Release
+        run: |
+          test -n "$(find node_modules/.pnpm -path '*better-sqlite3*' -name 'better_sqlite3.node' -print -quit)" \
+            || { echo '!! better_sqlite3.node 未编译 (pnpm 10 build scripts 被拦截?)'; exit 1; }
+          echo "native binding OK"
 
       - name: Install Playwright chromium (含 Linux 系统依赖)
         if: runner.os == 'Linux'
