@@ -12,9 +12,18 @@
 
 ### 启动预览
 
-双击工作区根目录 `start_preview.bat`（或 Git Bash 执行 `start_preview.sh`）：
-- 自动启动本地静态服务 `http://127.0.0.1:8123`（服务根 = `packages/web-ui/frontend`，保证 /assets 解析）
-- 打开最终三主题原型；切至「AI 录制」/「浏览器录制」页即可看到真实界面实时嵌入
+直接双击打开 [`AutoTest_UX交互原型_三主题.html`](../需求设计/AutoTest_UX交互原型_三主题.html) 即可预览静态交互；
+其中「AI 录制」「浏览器录制」页嵌入的是真实界面，需先启动本地服务：
+
+```bash
+# 方式一：启动完整后端（推荐，业务功能全部可用）
+pnpm dev:web-ui          # → http://127.0.0.1:25000
+
+# 方式二：仅静态预览前端页面
+cd packages/web-ui/frontend && python -m http.server 8123 --bind 127.0.0.1
+```
+
+打开原型后切至「AI 录制」/「浏览器录制」页即可看到真实界面实时嵌入。
 
 ## 📌 目录结构
 
