@@ -86,20 +86,40 @@ BATEOF
 @echo off
 chcp 65001 >nul
 cd /d %~dp0
+setlocal enabledelayedexpansion
+set "PORT=25000"
+if exist application.json (
+  for /f "delims=" %%a in ('node -e "const c=require('./application.json');process.stdout.write(String(c.port||25000))"') do set "PORT=%%a"
+)
+rem 1) 按 PID 文件杀进程树（记录的是 cmd wrapper，可能已退出 → 静默属正常）
 if exist data\runner-runner.pid (
   set /p RPID=<data\runner-runner.pid
-  taskkill /F /T /PID %RPID% >nul 2>&1
+  taskkill /F /T /PID !RPID! >nul 2>&1
   del /q data\runner-runner.pid >nul 2>&1
-  echo 已停止 Runner (PID %RPID%)
 )
 if exist data\runner.pid (
   set /p PID=<data\runner.pid
-  taskkill /F /T /PID %PID% >nul 2>&1
+  taskkill /F /T /PID !PID! >nul 2>&1
   del /q data\runner.pid >nul 2>&1
-  echo 已停止 WebUI (PID %PID%)
 )
-if not exist data\runner.pid if not exist data\runner-runner.pid echo AutoTest Runner 未在运行
+rem 2) 按端口兜底：wrapper 退出后 node 树仍占端口 → 找监听 PID 连树杀
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":%PORT% " ^| findstr "LISTENING"') do (
+  taskkill /F /T /PID %%p >nul 2>&1
+)
+rem 3) 清理包内浏览器的残留进程（会话异常退出遗留的 chrome-headless-shell 等）
+powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like '%~dp0browsers*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
+rem 复核：端口已释放
+ping -n 2 127.0.0.1 >nul
+netstat -ano | findstr ":%PORT% " | findstr "LISTENING" >nul 2>&1
+if errorlevel 1 (
+  echo [OK] AutoTest Runner 已停止（端口 %PORT% 已释放）
+) else (
+  echo [WARN] 端口 %PORT% 仍被占用，请手动检查
+)
+endlocal
 BATEOF
+  # cmd 对 LF-only 批处理的括号块/for 会错读 → 强制 CRLF 行尾
+  sed -i 's/$/\r/' "$OUT/stop.bat" 2>/dev/null || true
 
   cat > "$OUT/start.sh" <<'SHEOF'
 #!/usr/bin/env bash
